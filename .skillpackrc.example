@@ -1,0 +1,25 @@
+{
+  "default_engine": "codex",
+  "auto_stash": true,
+  "auto_branch": true,
+  "parallel_variants": 5,
+  "log_level": "info",
+  "output_format": "rich",
+  "codex": {
+    "sandbox": "read-only",
+    "approval": "on-request",
+    "full_auto": false,
+    "model": null,
+    "timeout_seconds": 600
+  },
+  "gemini": {
+    "headless": true,
+    "model": null,
+    "timeout_seconds": 300
+  },
+  "claude": {
+    "model": "claude-sonnet-4-20250514",
+    "timeout_seconds": 600,
+    "dangerously_skip_permissions": false
+  }
+}

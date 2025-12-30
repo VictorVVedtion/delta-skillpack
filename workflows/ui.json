@@ -1,0 +1,15 @@
+{
+  "name": "ui",
+  "engine": "gemini",
+  "variants": 1,
+  "prompt_template": "ui.md",
+  "gemini": {
+    "headless": true,
+    "model": "gemini-3-pro-preview",
+    "timeout_seconds": 300
+  },
+  "output": {
+    "dir": "ui",
+    "pattern": "ui_spec.md"
+  }
+}

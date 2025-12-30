@@ -1,0 +1,15 @@
+{
+  "name": "plan",
+  "engine": "claude",
+  "variants": 5,
+  "prompt_template": "plan.md",
+  "claude": {
+    "model": "claude-opus-4-5-20251101",
+    "timeout_seconds": 600,
+    "dangerously_skip_permissions": false
+  },
+  "output": {
+    "dir": "plans",
+    "pattern": "plan_{i}.md"
+  }
+}

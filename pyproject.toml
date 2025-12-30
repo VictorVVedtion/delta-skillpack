@@ -1,0 +1,71 @@
+[project]
+name = "delta-skillpack"
+version = "2.0.0"
+description = "Modern workflow orchestrator for terminal agents (Codex, Gemini, Claude)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "RiverBit", email = "team@riverbit.io"}
+]
+keywords = ["cli", "workflow", "codex", "gemini", "claude", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+]
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+skill = "skillpack.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/riverbit/delta-skillpack"
+Documentation = "https://github.com/riverbit/delta-skillpack#readme"
+Repository = "https://github.com/riverbit/delta-skillpack"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["skillpack"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "skillpack/",
+    "workflows/",
+    "prompts/",
+    "bin/",
+    "README.md",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

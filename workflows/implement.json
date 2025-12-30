@@ -1,0 +1,19 @@
+{
+  "name": "implement",
+  "engine": "codex",
+  "variants": 1,
+  "prompt_template": "implement.md",
+  "depends_on": "plan",
+  "pass_output_as": "PLAN_TEXT",
+  "codex": {
+    "sandbox": "workspace-write",
+    "approval": "on-request",
+    "full_auto": false,
+    "model": "gpt-5.2-codex",
+    "timeout_seconds": 900
+  },
+  "output": {
+    "dir": "implement",
+    "pattern": "summary.md"
+  }
+}

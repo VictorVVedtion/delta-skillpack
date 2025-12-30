@@ -1,0 +1,15 @@
+{
+  "name": "review",
+  "engine": "claude",
+  "variants": 1,
+  "prompt_template": "review.md",
+  "claude": {
+    "model": "claude-opus-4-5-20251101",
+    "timeout_seconds": 600,
+    "dangerously_skip_permissions": false
+  },
+  "output": {
+    "dir": "review",
+    "pattern": "review.md"
+  }
+}

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Delta SkillPack CLI wrapper
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILLPACK_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Add skillpack to PYTHONPATH
+export PYTHONPATH="$SKILLPACK_ROOT:$PYTHONPATH"
+
+# Run CLI
+exec python3 -m skillpack.cli "$@"
