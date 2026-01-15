@@ -1,8 +1,10 @@
 {
   "name": "plan",
+  "description": "Architecture planning - Claude Opus 4.5 for deep reasoning",
   "engine": "claude",
   "variants": 5,
   "prompt_template": "plan.md",
+  "task_type": "planning",
   "claude": {
     "model": "claude-opus-4-5-20251101",
     "timeout_seconds": 600,

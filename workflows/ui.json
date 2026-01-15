@@ -1,11 +1,13 @@
 {
   "name": "ui",
+  "description": "UI/UX design - Gemini 3 Pro with Vercel Web Interface Guidelines",
   "engine": "gemini",
   "variants": 1,
   "prompt_template": "ui.md",
+  "task_type": "ui_design",
   "gemini": {
     "headless": true,
-    "model": "gemini-3-pro-preview",
+    "model": "gemini-3-pro",
     "timeout_seconds": 300
   },
   "output": {

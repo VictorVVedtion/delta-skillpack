@@ -1,27 +1,29 @@
 """Core skill orchestrator with async execution and Rich UI."""
 from __future__ import annotations
+
 import asyncio
 import json
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator
 
-from rich.console import Console
+from rich import box
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 from rich.tree import Tree
-from rich.syntax import Syntax
-from rich import box
 
+from .engines import Engine, get_engine
+from .logging import get_console, log
 from .models import (
-    WorkflowDef, RunMeta, RunResult, GitCheckpoint,
-    EngineType, SkillpackConfig, CodexConfig, GeminiConfig
+    EngineType,
+    GitCheckpoint,
+    RunMeta,
+    RunResult,
+    SkillpackConfig,
+    WorkflowDef,
 )
-from .engines import get_engine, Engine
-from .logging import log, get_console
 
 console = get_console()
 
@@ -321,7 +323,8 @@ class SkillRunner:
         if meta.git.enabled and meta.git.branch:
             summary.add_row("Branch", meta.git.branch)
         
-        console.print(Panel(summary, title="[bold]Run Summary", border_style="green" if meta.failure_count == 0 else "yellow"))
+        border = "green" if meta.failure_count == 0 else "yellow"
+        console.print(Panel(summary, title="[bold]Run Summary", border_style=border))
         
         # Output files
         if meta.results:

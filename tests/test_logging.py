@@ -6,8 +6,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from skillpack.logging import (
     SkillLogger,
     get_console,

@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from skillpack.cli import cli, AliasedGroup
+from skillpack.cli import cli
 from skillpack.models import (
     EngineType,
     GitCheckpoint,
@@ -149,14 +147,13 @@ class TestPlanCommand:
             success_count=3,
         )
 
-        with runner.isolated_filesystem():
-            with patch("skillpack.cli.SkillRunner") as MockRunner:
-                mock_instance = MagicMock()
-                mock_instance.run = AsyncMock(return_value=mock_meta)
-                mock_instance.display_results = MagicMock()
-                MockRunner.return_value = mock_instance
+        with runner.isolated_filesystem(), patch("skillpack.cli.SkillRunner") as MockRunner:
+            mock_instance = MagicMock()
+            mock_instance.run = AsyncMock(return_value=mock_meta)
+            mock_instance.display_results = MagicMock()
+            MockRunner.return_value = mock_instance
 
-                result = runner.invoke(cli, ["plan", "Test task", "-n", "3", "--no-git"])
+            result = runner.invoke(cli, ["plan", "Test task", "-n", "3", "--no-git"])
 
         assert result.exit_code == 0
 
@@ -258,14 +255,13 @@ class TestRunCommand:
             success_count=1,
         )
 
-        with runner.isolated_filesystem():
-            with patch("skillpack.cli.SkillRunner") as MockRunner:
-                mock_instance = MagicMock()
-                mock_instance.run = AsyncMock(return_value=mock_meta)
-                mock_instance.display_results = MagicMock()
-                MockRunner.return_value = mock_instance
+        with runner.isolated_filesystem(), patch("skillpack.cli.SkillRunner") as MockRunner:
+            mock_instance = MagicMock()
+            mock_instance.run = AsyncMock(return_value=mock_meta)
+            mock_instance.display_results = MagicMock()
+            MockRunner.return_value = mock_instance
 
-                result = runner.invoke(cli, ["run", "review", "Check code quality", "--no-git"])
+            result = runner.invoke(cli, ["run", "review", "Check code quality", "--no-git"])
 
         assert result.exit_code == 0
 
@@ -296,11 +292,13 @@ class TestPipelineCommand:
             success_count=1,
         )
 
-        with runner.isolated_filesystem():
-            with patch("skillpack.cli.SkillRunner") as MockRunner:
-                with patch("skillpack.cli.run_pipeline", new=AsyncMock(return_value=[mock_meta])):
-                    MockRunner.return_value = MagicMock()
-                    result = runner.invoke(cli, ["pipeline", "plan", "implement", "Test task"])
+        with (
+            runner.isolated_filesystem(),
+            patch("skillpack.cli.SkillRunner") as MockRunner,
+            patch("skillpack.cli.run_pipeline", new=AsyncMock(return_value=[mock_meta])),
+        ):
+            MockRunner.return_value = MagicMock()
+            result = runner.invoke(cli, ["pipeline", "plan", "implement", "Test task"])
 
         assert result.exit_code == 0
 
@@ -379,13 +377,9 @@ class TestCommonOptions:
     def test_sandbox_option(self, runner: CliRunner):
         """Test --sandbox option."""
         with runner.isolated_filesystem():
-            result = runner.invoke(cli, ["plan", "Test", "--sandbox", "workspace-write", "--dry-run"])
-        assert result.exit_code == 0
-
-    def test_approval_option(self, runner: CliRunner):
-        """Test --approval option."""
-        with runner.isolated_filesystem():
-            result = runner.invoke(cli, ["plan", "Test", "--approval", "never", "--dry-run"])
+            result = runner.invoke(
+                cli, ["plan", "Test", "--sandbox", "workspace-write", "--dry-run"]
+            )
         assert result.exit_code == 0
 
     def test_model_option(self, runner: CliRunner):
@@ -434,8 +428,3 @@ class TestErrorHandling:
             result = runner.invoke(cli, ["plan", "Test", "--sandbox", "invalid"])
         assert result.exit_code != 0
 
-    def test_invalid_approval_value(self, runner: CliRunner):
-        """Test invalid --approval value."""
-        with runner.isolated_filesystem():
-            result = runner.invoke(cli, ["plan", "Test", "--approval", "invalid"])
-        assert result.exit_code != 0

@@ -3,18 +3,17 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from skillpack.models import (
-    ApprovalMode,
+    ClaudeConfig,
     CodexConfig,
     EngineType,
     GeminiConfig,
-    ClaudeConfig,
     GitCheckpoint,
     OutputConfig,
     RunMeta,
@@ -65,10 +64,9 @@ def temp_dir() -> Generator[Path, None, None]:
 def sample_codex_config() -> CodexConfig:
     """Sample Codex configuration."""
     return CodexConfig(
-        sandbox=SandboxMode.READ_ONLY,
-        approval=ApprovalMode.ON_REQUEST,
-        full_auto=False,
-        model="gpt-4",
+        sandbox=SandboxMode.WORKSPACE_WRITE,
+        full_auto=True,
+        model="gpt-5.2",
         timeout_seconds=300,
     )
 
@@ -78,7 +76,7 @@ def sample_gemini_config() -> GeminiConfig:
     """Sample Gemini configuration."""
     return GeminiConfig(
         headless=True,
-        model="gemini-pro",
+        model="gemini-3-pro",
         timeout_seconds=300,
     )
 
@@ -87,7 +85,7 @@ def sample_gemini_config() -> GeminiConfig:
 def sample_claude_config() -> ClaudeConfig:
     """Sample Claude configuration."""
     return ClaudeConfig(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
         timeout_seconds=600,
         dangerously_skip_permissions=False,
     )
@@ -103,8 +101,8 @@ def sample_workflow_def() -> WorkflowDef:
         prompt_template="plan.md",
         output=OutputConfig(dir="plans", pattern="plan_{i}.md"),
         codex=CodexConfig(
-            sandbox=SandboxMode.READ_ONLY,
-            approval=ApprovalMode.NEVER,
+            sandbox=SandboxMode.WORKSPACE_WRITE,
+            full_auto=True,
         ),
     )
 
@@ -196,8 +194,8 @@ def skillpack_rc(temp_repo: Path) -> Path:
         "log_level": "debug",
         "output_format": "rich",
         "codex": {
-            "sandbox": "read-only",
-            "approval": "on-request",
+            "sandbox": "workspace-write",
+            "full_auto": True,
             "timeout_seconds": 300,
         },
     }

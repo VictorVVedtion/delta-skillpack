@@ -1,9 +1,8 @@
 """Unit tests for skillpack.engines module."""
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -16,7 +15,6 @@ from skillpack.engines import (
     get_engine,
 )
 from skillpack.models import (
-    ApprovalMode,
     ClaudeConfig,
     CodexConfig,
     GeminiConfig,
@@ -208,20 +206,17 @@ class TestCodexEngine:
         """Test command line arguments for read-only mode."""
         config = CodexConfig(
             sandbox=SandboxMode.READ_ONLY,
-            approval=ApprovalMode.NEVER,
-            model="gpt-4",
+            model="gpt-5.2",
         )
         engine = CodexEngine(config)
         # Verify config is stored correctly
         assert engine.config.sandbox == SandboxMode.READ_ONLY
-        assert engine.config.approval == ApprovalMode.NEVER
-        assert engine.config.model == "gpt-4"
+        assert engine.config.model == "gpt-5.2"
 
     def test_command_building_full_auto(self):
         """Test command line arguments for full-auto mode."""
         config = CodexConfig(
             sandbox=SandboxMode.WORKSPACE_WRITE,
-            approval=ApprovalMode.NEVER,
             full_auto=True,
         )
         engine = CodexEngine(config)
@@ -338,13 +333,13 @@ class TestGetEngine:
     def test_get_engine_with_config(self):
         config = {
             "sandbox": "workspace-write",
-            "approval": "never",
-            "model": "gpt-4o",
+            "full_auto": True,
+            "model": "gpt-5.2",
         }
         engine = get_engine("codex", config)
         assert isinstance(engine, CodexEngine)
         assert engine.config.sandbox == SandboxMode.WORKSPACE_WRITE
-        assert engine.config.model == "gpt-4o"
+        assert engine.config.model == "gpt-5.2"
 
     def test_get_unknown_engine(self):
         with pytest.raises(ValueError, match="Unknown engine"):
@@ -354,7 +349,7 @@ class TestGetEngine:
         engine = get_engine("codex", {})
         assert isinstance(engine, CodexEngine)
         # Should use defaults
-        assert engine.config.sandbox == SandboxMode.READ_ONLY
+        assert engine.config.sandbox == SandboxMode.WORKSPACE_WRITE
 
 
 class TestEngineIntegration:

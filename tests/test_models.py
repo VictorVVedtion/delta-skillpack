@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from skillpack.models import (
-    ApprovalMode,
     ClaudeConfig,
     CodexConfig,
     EngineType,
@@ -36,16 +35,6 @@ class TestSandboxMode:
         assert SandboxMode("read-only") == SandboxMode.READ_ONLY
 
 
-class TestApprovalMode:
-    """Tests for ApprovalMode enum."""
-
-    def test_values(self):
-        assert ApprovalMode.UNTRUSTED.value == "untrusted"
-        assert ApprovalMode.ON_FAILURE.value == "on-failure"
-        assert ApprovalMode.ON_REQUEST.value == "on-request"
-        assert ApprovalMode.NEVER.value == "never"
-
-
 class TestEngineType:
     """Tests for EngineType enum."""
 
@@ -60,28 +49,25 @@ class TestCodexConfig:
 
     def test_defaults(self):
         config = CodexConfig()
-        assert config.sandbox == SandboxMode.READ_ONLY
-        assert config.approval == ApprovalMode.ON_REQUEST
-        assert config.full_auto is False
+        assert config.sandbox == SandboxMode.WORKSPACE_WRITE
+        assert config.full_auto is True
         assert config.model is None
         assert config.timeout_seconds == 600
 
     def test_custom_values(self, sample_codex_config: CodexConfig):
-        assert sample_codex_config.sandbox == SandboxMode.READ_ONLY
-        assert sample_codex_config.model == "gpt-4"
+        assert sample_codex_config.sandbox == SandboxMode.WORKSPACE_WRITE
+        assert sample_codex_config.model == "gpt-5.2"
         assert sample_codex_config.timeout_seconds == 300
 
     def test_from_dict(self):
         data = {
             "sandbox": "workspace-write",
-            "approval": "never",
             "full_auto": True,
-            "model": "o1-preview",
+            "model": "gpt-5.2",
             "timeout_seconds": 900,
         }
         config = CodexConfig(**data)
         assert config.sandbox == SandboxMode.WORKSPACE_WRITE
-        assert config.approval == ApprovalMode.NEVER
         assert config.full_auto is True
 
 
@@ -95,7 +81,7 @@ class TestGeminiConfig:
         assert config.timeout_seconds == 300
 
     def test_custom_values(self, sample_gemini_config: GeminiConfig):
-        assert sample_gemini_config.model == "gemini-pro"
+        assert sample_gemini_config.model == "gemini-3-pro"
 
 
 class TestClaudeConfig:
@@ -103,7 +89,7 @@ class TestClaudeConfig:
 
     def test_defaults(self):
         config = ClaudeConfig()
-        assert config.model == "claude-sonnet-4-20250514"
+        assert config.model == "claude-sonnet-4-5-20250929"
         assert config.timeout_seconds == 600
         assert config.dangerously_skip_permissions is False
 
@@ -146,7 +132,7 @@ class TestWorkflowDef:
         assert sample_workflow_def.name == "test-plan"
         assert sample_workflow_def.variants == 3
         assert sample_workflow_def.codex is not None
-        assert sample_workflow_def.codex.sandbox == SandboxMode.READ_ONLY
+        assert sample_workflow_def.codex.sandbox == SandboxMode.WORKSPACE_WRITE
 
     def test_variant_bounds(self):
         # Min bound

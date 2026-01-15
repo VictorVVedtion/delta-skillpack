@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Delta SkillPack CLI - Modern terminal workflow orchestrator."""
 from __future__ import annotations
+
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.table import Table
 from rich import box
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
 
-from .core import SkillRunner, doctor, load_config, load_workflow, run_pipeline, WORKFLOWS
-from .models import SandboxMode, ApprovalMode
-from .logging import init_logging, get_console
+from .core import WORKFLOWS, SkillRunner, load_workflow, run_pipeline
+from .logging import get_console, init_logging
+from .models import SandboxMode
 
 console = get_console()
 
@@ -43,11 +42,16 @@ class AliasedGroup(click.Group):
 @click.option("--repo", "-r", default=".", help="Repository path (default: current dir)")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 @click.option("--quiet", "-q", is_flag=True, help="Minimal output")
-@click.option("--log-level", type=click.Choice(["debug", "info", "warning", "error"]), default="info", help="Log level")
+@click.option(
+    "--log-level",
+    type=click.Choice(["debug", "info", "warning", "error"]),
+    default="info",
+    help="Log level",
+)
 @click.option("--log-file", type=click.Path(), default=None, help="Log file path")
 @click.version_option(version="2.0.0", prog_name="skill")
 @click.pass_context
-def cli(ctx, repo: str, output_json: bool, quiet: bool, log_level: str, log_file: Optional[str]):
+def cli(ctx, repo: str, output_json: bool, quiet: bool, log_level: str, log_file: str | None):
     """Delta SkillPack - Workflow orchestrator for Codex, Gemini, and Claude.
 
     \b
@@ -74,9 +78,9 @@ def cli(ctx, repo: str, output_json: bool, quiet: bool, log_level: str, log_file
         click.echo(ctx.get_help())
 
 
-@cli.command()
+@cli.command("doctor")
 @click.pass_context
-def doctor(ctx):
+def doctor_cmd(ctx):
     """Check environment and list available skills."""
     from .core import doctor as run_doctor
     run_doctor(ctx.obj["repo"])
@@ -113,11 +117,6 @@ def add_common_options(f):
         type=click.Choice(["read-only", "workspace-write", "danger-full-access"]),
         help="Sandbox mode (Codex)",
     )(f)
-    f = click.option(
-        "--approval",
-        type=click.Choice(["untrusted", "on-failure", "on-request", "never"]),
-        help="Approval mode (Codex)",
-    )(f)
     f = click.option("--model", "-m", help="Model override")(f)
     f = click.option("--full-auto", is_flag=True, help="Enable full-auto mode")(f)
     f = click.option("--dry-run", is_flag=True, help="Show what would run without executing")(f)
@@ -128,7 +127,7 @@ def run_skill_command(
     ctx,
     skill: str,
     task: str,
-    plan_file: Optional[str] = None,
+    plan_file: str | None = None,
     **kwargs,
 ):
     """Common skill execution logic."""
@@ -139,8 +138,6 @@ def run_skill_command(
     engine_overrides = {}
     if kwargs.get("sandbox"):
         engine_overrides["sandbox"] = SandboxMode(kwargs["sandbox"])
-    if kwargs.get("approval"):
-        engine_overrides["approval"] = ApprovalMode(kwargs["approval"])
     if kwargs.get("model"):
         engine_overrides["model"] = kwargs["model"]
     if kwargs.get("full_auto"):
@@ -201,7 +198,7 @@ def plan(ctx, task: str, **kwargs):
 @click.option("--interactive", "-i", is_flag=True, help="Interactively select plan")
 @add_common_options
 @click.pass_context
-def implement(ctx, task: str, plan_file: Optional[str], interactive: bool, **kwargs):
+def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs):
     """Implement a selected plan (workspace-write).
     
     \b
@@ -258,7 +255,7 @@ def ui(ctx, task: str, **kwargs):
 @click.option("--plan-file", "-f", help="Plan file input")
 @add_common_options
 @click.pass_context
-def run(ctx, skill_name: str, task: str, plan_file: Optional[str], **kwargs):
+def run(ctx, skill_name: str, task: str, plan_file: str | None, **kwargs):
     """Run any workflow by name.
     
     \b
@@ -288,8 +285,6 @@ def pipeline(ctx, skills: tuple[str, ...], task: str, **kwargs):
     engine_overrides = {}
     if kwargs.get("sandbox"):
         engine_overrides["sandbox"] = SandboxMode(kwargs["sandbox"])
-    if kwargs.get("approval"):
-        engine_overrides["approval"] = ApprovalMode(kwargs["approval"])
     
     runner = SkillRunner(repo)
     
@@ -372,6 +367,344 @@ def show(ctx, run_id: str):
     console.print("\n[bold]Outputs:")
     for f in run_dir.rglob("*.md"):
         console.print(f"  • {f.relative_to(run_dir)}")
+
+
+# =============================================================================
+# Ralph - Industrial Automation Development
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def ralph(ctx):
+    """Ralph - PRD-driven autonomous development.
+
+    \b
+    Quick start:
+      skill ralph init "Add user authentication"
+      skill ralph status
+      skill ralph start
+    """
+    pass
+
+
+@ralph.command("init")
+@click.argument("task")
+@click.option("--prd-file", "-f", help="Use existing PRD JSON file")
+@click.pass_context
+def ralph_init(ctx, task: str, prd_file: str | None):
+    """Initialize PRD from task description.
+
+    \b
+    Examples:
+      skill ralph init "Add K-line chart to Trade page"
+      skill ralph init -f requirements.json
+    """
+    import json
+    from datetime import datetime
+
+    from .models import PRD, StoryType, UserStory
+    from .ralph import MemoryManager
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    if prd_file:
+        # Load existing PRD
+        prd_path = Path(prd_file)
+        if not prd_path.exists():
+            console.print(f"[red]PRD file not found: {prd_file}")
+            return
+        try:
+            data = json.loads(prd_path.read_text())
+            prd = PRD.model_validate(data)
+        except Exception as e:
+            console.print(f"[red]Failed to parse PRD: {e}")
+            return
+    else:
+        # Generate a simple PRD from task
+        prd_id = f"PRD-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        prd = PRD(
+            id=prd_id,
+            title=task[:50],
+            description=task,
+            stories=[
+                UserStory(
+                    id="STORY-001",
+                    title=task[:30],
+                    description=task,
+                    type=StoryType.FEATURE,
+                    priority="p1",
+                    acceptance_criteria=["Implementation complete", "Tests pass"],
+                )
+            ],
+        )
+        console.print(
+            "[yellow]Note: Generated simple PRD. "
+            "For complex tasks, use 'skill plan' first to generate detailed plans."
+        )
+
+    memory.save_prd(prd)
+    console.print(f"[green]PRD initialized: {prd.id}")
+    console.print(f"  Stories: {len(prd.stories)}")
+    for story in prd.stories:
+        console.print(f"    • {story.id} [{story.priority}] {story.title} ({story.type.value})")
+
+
+@ralph.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def ralph_status(ctx, as_json: bool):
+    """Show current PRD execution status."""
+    import json as json_module
+
+    from .ralph import MemoryManager
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        if as_json:
+            console.print("{}")
+        else:
+            console.print("[yellow]No PRD found. Run 'skill ralph init' first.")
+        return
+
+    if as_json:
+        data = {
+            "id": prd.id,
+            "title": prd.title,
+            "completion_rate": prd.completion_rate,
+            "is_complete": prd.is_complete,
+            "stories": len(prd.stories),
+            "passed": sum(1 for s in prd.stories if s.passes),
+            "pending": sum(1 for s in prd.stories if not s.passes),
+        }
+        console.print(json_module.dumps(data, indent=2))
+    else:
+        table = Table(title=f"PRD: {prd.title}", box=box.ROUNDED)
+        table.add_column("ID", style="cyan")
+        table.add_column("Title")
+        table.add_column("Type")
+        table.add_column("Priority")
+        table.add_column("Status")
+        table.add_column("Attempts")
+
+        for story in prd.stories:
+            status = "[green]✓[/]" if story.passes else "[yellow]○[/]"
+            table.add_row(
+                story.id,
+                story.title[:30],
+                story.type.value,
+                story.priority,
+                status,
+                str(story.attempts),
+            )
+
+        console.print(table)
+        console.print(f"\nCompletion: {prd.completion_rate * 100:.1f}%")
+
+
+@ralph.command("start")
+@click.option("--max-iterations", "-n", default=100, help="Maximum iterations")
+@click.option("--dry-run", is_flag=True, help="Show what would run")
+@click.pass_context
+def ralph_start(ctx, max_iterations: int, dry_run: bool):
+    """Start Ralph automation loop.
+
+    \b
+    Examples:
+      skill ralph start
+      skill ralph start --max-iterations 50
+      skill ralph start --dry-run
+    """
+    from .ralph import MemoryManager, StoryOrchestrator
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        console.print("[red]No PRD found. Run 'skill ralph init' first.")
+        return
+
+    if dry_run:
+        console.print(Panel(f"""
+[bold]Dry Run: Ralph Automation[/]
+• PRD: {prd.id}
+• Stories: {len(prd.stories)}
+• Max Iterations: {max_iterations}
+• Would execute until complete or max iterations reached
+        """.strip(), border_style="yellow"))
+        return
+
+    console.print("[bold]Starting Ralph automation loop[/]")
+    console.print(f"  PRD: {prd.id}")
+    console.print(f"  Stories: {len(prd.stories)}")
+    console.print(f"  Max Iterations: {max_iterations}")
+    console.print()
+
+    orchestrator = StoryOrchestrator(repo)
+    complete = asyncio.run(orchestrator.run_loop(prd, max_iterations))
+
+    if complete:
+        console.print("\n[green]<promise>COMPLETE</promise>[/]")
+    else:
+        console.print("\n[yellow]Loop ended without completing all stories.[/]")
+
+
+@ralph.command("next-story")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def ralph_next_story(ctx, as_json: bool):
+    """Get next story to execute (for scripts)."""
+    import json as json_module
+
+    from .ralph import MemoryManager
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        console.print("null" if as_json else "[yellow]No PRD found")
+        return
+
+    story = prd.next_story()
+    if story is None:
+        console.print("null" if as_json else "[yellow]No pending stories")
+        return
+
+    if as_json:
+        data = {
+            "id": story.id,
+            "title": story.title,
+            "type": story.type.value,
+            "priority": story.priority,
+            "attempts": story.attempts,
+        }
+        console.print(json_module.dumps(data))
+    else:
+        console.print(f"{story.id}: {story.title} ({story.type.value})")
+
+
+@ralph.command("story-status")
+@click.option("--story-id", required=True, help="Story ID to check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def ralph_story_status(ctx, story_id: str, as_json: bool):
+    """Get status of a specific story."""
+    import json as json_module
+
+    from .ralph import MemoryManager
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        console.print("null" if as_json else "[yellow]No PRD found")
+        return
+
+    story = next((s for s in prd.stories if s.id == story_id), None)
+    if story is None:
+        console.print("null" if as_json else f"[yellow]Story not found: {story_id}")
+        return
+
+    if as_json:
+        data = {
+            "id": story.id,
+            "title": story.title,
+            "type": story.type.value,
+            "passes": story.passes,
+            "attempts": story.attempts,
+            "last_error": story.last_error,
+        }
+        console.print(json_module.dumps(data))
+    else:
+        status = "[green]✓ Passed[/]" if story.passes else "[yellow]○ Pending[/]"
+        console.print(f"{story.id}: {status}")
+        if story.last_error:
+            console.print(f"  Last error: {story.last_error}")
+
+
+@ralph.command("execute-pipeline")
+@click.option("--story-id", required=True, help="Story ID to execute")
+@click.option("--steps", required=True, help="Comma-separated steps")
+@click.pass_context
+def ralph_execute_pipeline(ctx, story_id: str, steps: str):
+    """Execute skill pipeline for a story.
+
+    \b
+    Examples:
+      skill ralph execute-pipeline --story-id STORY-001 --steps "plan,implement,review,verify"
+    """
+    from .ralph import MemoryManager, StoryOrchestrator
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        console.print("[red]No PRD found")
+        return
+
+    story = next((s for s in prd.stories if s.id == story_id), None)
+    if story is None:
+        console.print(f"[red]Story not found: {story_id}")
+        return
+
+    console.print(f"[bold]Executing pipeline for {story_id}[/]")
+    console.print(f"  Steps: {steps}")
+
+    orchestrator = StoryOrchestrator(repo)
+    success = asyncio.run(orchestrator.execute_story(story))
+
+    memory.save_prd(prd)
+
+    if success:
+        console.print(f"[green]✓ {story_id} completed successfully[/]")
+    else:
+        console.print(f"[red]✗ {story_id} failed: {story.last_error}[/]")
+
+
+@ralph.command("mark-failed")
+@click.option("--story-id", required=True, help="Story ID to mark")
+@click.option("--error", required=True, help="Error message")
+@click.pass_context
+def ralph_mark_failed(ctx, story_id: str, error: str):
+    """Mark a story as failed (for scripts)."""
+    from .ralph import MemoryManager
+
+    repo = ctx.obj["repo"]
+    memory = MemoryManager(repo)
+
+    prd = memory.load_prd()
+    if prd is None:
+        console.print("[red]No PRD found")
+        return
+
+    story = next((s for s in prd.stories if s.id == story_id), None)
+    if story is None:
+        console.print(f"[red]Story not found: {story_id}")
+        return
+
+    story.last_error = error
+    story.attempts += 1
+    memory.save_prd(prd)
+
+    console.print(f"[yellow]Marked {story_id} as failed: {error}")
+
+
+@ralph.command("cancel")
+@click.pass_context
+def ralph_cancel(ctx):
+    """Cancel current Ralph loop."""
+    repo = ctx.obj["repo"]
+    cancel_file = repo / ".skillpack" / "ralph" / ".cancel"
+    cancel_file.write_text("cancel")
+    console.print("[yellow]Cancel signal sent. Loop will stop after current iteration.")
 
 
 def main():

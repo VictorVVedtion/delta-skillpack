@@ -1,16 +1,16 @@
 {
   "name": "implement",
+  "description": "Code implementation - GPT-5.2-Codex Extra High with full-auto execution",
   "engine": "codex",
   "variants": 1,
   "prompt_template": "implement.md",
-  "depends_on": "plan",
-  "pass_output_as": "PLAN_TEXT",
+  "task_type": "implementation",
   "codex": {
     "sandbox": "workspace-write",
-    "approval": "on-request",
-    "full_auto": false,
+    "full_auto": true,
     "model": "gpt-5.2-codex",
-    "timeout_seconds": 900
+    "reasoning_effort": "xhigh",
+    "timeout_seconds": 1200
   },
   "output": {
     "dir": "implement",

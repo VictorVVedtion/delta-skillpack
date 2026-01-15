@@ -1,7 +1,6 @@
 """Unit tests for skillpack.core module."""
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +24,6 @@ from skillpack.models import (
     RunMeta,
     RunResult,
     SkillpackConfig,
-    WorkflowDef,
 )
 
 
@@ -95,8 +93,12 @@ class TestLoadWorkflow:
         wf = load_workflow("implement")
         assert wf.name == "implement"
         assert wf.variants == 1
-        assert wf.depends_on == "plan"
-        assert wf.pass_output_as == "PLAN_TEXT"
+        # implement now runs independently (no depends_on)
+        assert wf.depends_on is None
+        assert wf.pass_output_as is None
+        assert wf.codex.model == "gpt-5.2-codex"
+        assert wf.codex.reasoning_effort.value == "xhigh"
+        assert wf.codex.full_auto is True
 
     def test_load_nonexistent_workflow(self):
         """Test loading a non-existent workflow raises error."""
@@ -456,17 +458,19 @@ class TestRunPipeline:
                 success_count=1,
             )
 
-        with patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)):
-            with patch.object(runner, "display_results"):
-                # Create dummy output files
-                (temp_repo / "plan_output.md").write_text("plan content")
-                (temp_repo / "implement_output.md").write_text("implement content")
+        with (
+            patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)),
+            patch.object(runner, "display_results"),
+        ):
+            # Create dummy output files
+            (temp_repo / "plan_output.md").write_text("plan content")
+            (temp_repo / "implement_output.md").write_text("implement content")
 
-                results = await run_pipeline(
-                    runner,
-                    ["plan", "implement"],
-                    "Test task",
-                )
+            results = await run_pipeline(
+                runner,
+                ["plan", "implement"],
+                "Test task",
+            )
 
         assert execution_order == ["plan", "implement"]
         assert len(results) == 2
@@ -492,13 +496,15 @@ class TestRunPipeline:
                 failure_count=1,
             )
 
-        with patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)):
-            with patch.object(runner, "display_results"):
-                results = await run_pipeline(
-                    runner,
-                    ["plan", "implement", "ui"],
-                    "Test task",
-                )
+        with (
+            patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)),
+            patch.object(runner, "display_results"),
+        ):
+            results = await run_pipeline(
+                runner,
+                ["plan", "implement", "ui"],
+                "Test task",
+            )
 
         # Should stop after first skill fails completely
         assert len(results) == 1
@@ -532,13 +538,15 @@ class TestRunPipeline:
                 success_count=1,
             )
 
-        with patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)):
-            with patch.object(runner, "display_results"):
-                await run_pipeline(
-                    runner,
-                    ["plan", "implement"],
-                    "Test task",
-                )
+        with (
+            patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)),
+            patch.object(runner, "display_results"),
+        ):
+            await run_pipeline(
+                runner,
+                ["plan", "implement"],
+                "Test task",
+            )
 
         # Second skill should receive plan_file from first skill's output
         assert len(received_kwargs) == 2
@@ -570,14 +578,16 @@ class TestRunPipeline:
                 success_count=1,
             )
 
-        with patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)):
-            with patch.object(runner, "display_results"):
-                # implement depends_on plan (defined in workflow)
-                results = await run_pipeline(
-                    runner,
-                    ["plan", "implement"],
-                    "Test task",
-                )
+        with (
+            patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)),
+            patch.object(runner, "display_results"),
+        ):
+            # implement depends_on plan (defined in workflow)
+            results = await run_pipeline(
+                runner,
+                ["plan", "implement"],
+                "Test task",
+            )
 
         assert "plan" in executed_skills
         assert "implement" in executed_skills
@@ -608,14 +618,16 @@ class TestRunPipeline:
                 success_count=1,
             )
 
-        with patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)):
-            with patch.object(runner, "display_results"):
-                # implement has pass_output_as: PLAN_TEXT
-                await run_pipeline(
-                    runner,
-                    ["plan", "implement"],
-                    "Test task",
-                )
+        with (
+            patch.object(runner, "run", new=AsyncMock(side_effect=mock_run)),
+            patch.object(runner, "display_results"),
+        ):
+            # implement has pass_output_as: PLAN_TEXT
+            await run_pipeline(
+                runner,
+                ["plan", "implement"],
+                "Test task",
+            )
 
         # implement should receive _pipeline_vars with PLAN_TEXT
         assert len(captured_vars) == 2
@@ -638,7 +650,7 @@ class TestDoctor:
         # Should produce some output
         captured = capsys.readouterr()
         # Rich output goes to stderr in some cases
-        output = captured.out + captured.err
+        _ = captured.out + captured.err  # Verify output was captured
         # The function uses Rich console which may not capture well in tests
 
     def test_doctor_detects_git(self, temp_repo: Path):

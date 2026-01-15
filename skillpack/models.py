@@ -1,10 +1,12 @@
 """Type-safe configuration models with validation."""
 from __future__ import annotations
-from enum import Enum
-from typing import Literal, Any
-from pydantic import BaseModel, Field, field_validator
-from pathlib import Path
+
 from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class SandboxMode(str, Enum):
@@ -13,24 +15,24 @@ class SandboxMode(str, Enum):
     DANGER_FULL = "danger-full-access"
 
 
-class ApprovalMode(str, Enum):
-    UNTRUSTED = "untrusted"
-    ON_FAILURE = "on-failure"
-    ON_REQUEST = "on-request"
-    NEVER = "never"
-
-
 class EngineType(str, Enum):
     CODEX = "codex"
     GEMINI = "gemini"
     CLAUDE = "claude"  # Future: Claude Code integration
 
 
+class ReasoningEffort(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    XHIGH = "xhigh"  # Extra High - maximum reasoning for complex tasks
+
+
 class CodexConfig(BaseModel):
-    sandbox: SandboxMode = SandboxMode.READ_ONLY
-    approval: ApprovalMode = ApprovalMode.ON_REQUEST
-    full_auto: bool = False
+    sandbox: SandboxMode = SandboxMode.WORKSPACE_WRITE
+    full_auto: bool = True
     model: str | None = None
+    reasoning_effort: ReasoningEffort = ReasoningEffort.XHIGH
     timeout_seconds: int = 600
 
 
@@ -41,10 +43,11 @@ class GeminiConfig(BaseModel):
 
 
 class ClaudeConfig(BaseModel):
-    """Future: Claude Code CLI integration."""
-    model: str = "claude-sonnet-4-20250514"
+    """Claude Code CLI integration."""
+    model: str = "claude-sonnet-4-5-20250929"
     timeout_seconds: int = 600
     dangerously_skip_permissions: bool = False
+    extended_thinking: bool = True  # Enable extended thinking for deeper reasoning
 
 
 class OutputConfig(BaseModel):
@@ -126,3 +129,144 @@ class SkillpackConfig(BaseModel):
     codex: CodexConfig = Field(default_factory=CodexConfig)
     gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     claude: ClaudeConfig = Field(default_factory=ClaudeConfig)
+
+
+# =============================================================================
+# Ralph - Industrial Automation Development System
+# =============================================================================
+
+
+class StoryType(str, Enum):
+    """Story type determines which skill pipeline to use."""
+    FEATURE = "feature"     # plan → implement → review → verify
+    UI = "ui"               # ui → implement → review → browser
+    REFACTOR = "refactor"   # plan → implement → review → verify
+    TEST = "test"           # implement → review → verify
+    DOCS = "docs"           # plan → implement → review
+
+
+class SkillStep(str, Enum):
+    """Individual skill step in a pipeline."""
+    PLAN = "plan"           # Claude Opus 4.5
+    IMPLEMENT = "implement"  # Codex GPT-5.2
+    REVIEW = "review"       # Claude Opus 4.5
+    UI = "ui"               # Gemini 3 Pro
+    VERIFY = "verify"       # pytest + ruff
+    BROWSER = "browser"     # Playwright MCP
+
+
+# Story type to skill pipeline mapping
+STORY_PIPELINES: dict[StoryType, list[SkillStep]] = {
+    StoryType.FEATURE: [
+        SkillStep.PLAN, SkillStep.IMPLEMENT, SkillStep.REVIEW, SkillStep.VERIFY
+    ],
+    StoryType.UI: [
+        SkillStep.UI, SkillStep.IMPLEMENT, SkillStep.REVIEW, SkillStep.BROWSER
+    ],
+    StoryType.REFACTOR: [
+        SkillStep.PLAN, SkillStep.IMPLEMENT, SkillStep.REVIEW, SkillStep.VERIFY
+    ],
+    StoryType.TEST: [
+        SkillStep.IMPLEMENT, SkillStep.REVIEW, SkillStep.VERIFY
+    ],
+    StoryType.DOCS: [
+        SkillStep.PLAN, SkillStep.IMPLEMENT, SkillStep.REVIEW
+    ],
+}
+
+
+class UserStory(BaseModel):
+    """A single user story with tracking state."""
+    model_config = {"arbitrary_types_allowed": True}
+
+    id: str                                   # STORY-001
+    title: str                                # Short title
+    description: str                          # Detailed description
+    type: StoryType                           # Determines skill pipeline
+    priority: str = "p1"                      # p0-p3
+    acceptance_criteria: list[str] = []       # Acceptance standards
+    verification_commands: list[str] = []     # Custom verification commands
+
+    # State tracking
+    passes: bool = False                      # Whether completed
+    attempts: int = 0                         # Attempt count
+    max_attempts: int = 3                     # Max retries
+    current_step: SkillStep | None = None     # Current execution step
+
+    # Dependencies
+    depends_on: list[str] = []                # Prerequisite story IDs
+
+    # Execution records
+    last_error: str | None = None
+    completed_at: datetime | None = None
+    step_outputs: dict[str, str] = {}         # {step: output_file}
+
+    def get_pipeline(self) -> list[SkillStep]:
+        """Get the skill pipeline for this story type."""
+        return STORY_PIPELINES[self.type]
+
+
+class PRD(BaseModel):
+    """Product Requirements Document with stories."""
+    model_config = {"arbitrary_types_allowed": True}
+
+    id: str
+    title: str
+    description: str
+    stories: list[UserStory] = []
+
+    # Global configuration
+    max_iterations: int = 100
+    timeout_minutes: int = 180
+    require_tests: bool = True
+    require_lint: bool = True
+
+    @property
+    def is_complete(self) -> bool:
+        """Check if all stories are complete."""
+        return all(s.passes for s in self.stories)
+
+    @property
+    def completion_rate(self) -> float:
+        """Calculate completion percentage."""
+        if not self.stories:
+            return 1.0
+        return sum(1 for s in self.stories if s.passes) / len(self.stories)
+
+    def next_story(self) -> UserStory | None:
+        """Get the next story to execute (considering priority and dependencies)."""
+        pending = [
+            s for s in self.stories
+            if not s.passes and s.attempts < s.max_attempts
+        ]
+        for story in sorted(pending, key=lambda s: (s.priority, s.attempts)):
+            deps_ok = all(
+                any(d.id == dep and d.passes for d in self.stories)
+                for dep in story.depends_on
+            )
+            if deps_ok:
+                return story
+        return None
+
+
+class RalphSession(BaseModel):
+    """Session state for Ralph automation."""
+    model_config = {"arbitrary_types_allowed": True}
+
+    session_id: str
+    prd_id: str
+    repo: str
+    started_at: datetime
+
+    # Iteration tracking
+    current_iteration: int = 0
+    iterations: list[dict] = []               # Per-iteration records
+
+    # Completion state
+    completed: bool = False
+    completed_at: datetime | None = None
+    completion_signal: str | None = None      # <promise>COMPLETE</promise>
+
+    # Statistics
+    passed_stories: int = 0
+    failed_stories: int = 0

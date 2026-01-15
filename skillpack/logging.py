@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import logging
-import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.text import Text
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 
@@ -105,7 +102,7 @@ class SkillLogger:
         self._logger = logging.getLogger(name)
         self._context: dict[str, Any] = {}
 
-    def bind(self, **kwargs: Any) -> "SkillLogger":
+    def bind(self, **kwargs: Any) -> SkillLogger:
         """Create a new logger with additional context."""
         new_logger = SkillLogger(self._logger.name)
         new_logger._context = {**self._context, **kwargs}
@@ -119,23 +116,23 @@ class SkillLogger:
         return f"{msg} {ctx_str}"
 
     def debug(self, msg: str, **kwargs: Any) -> None:
-        ctx = {**self._context, **kwargs}
+        self._context.update(kwargs)
         self._logger.debug(self._format_message(msg), extra={"markup": True})
 
     def info(self, msg: str, **kwargs: Any) -> None:
-        ctx = {**self._context, **kwargs}
+        self._context.update(kwargs)
         self._logger.info(self._format_message(msg), extra={"markup": True})
 
     def warning(self, msg: str, **kwargs: Any) -> None:
-        ctx = {**self._context, **kwargs}
+        self._context.update(kwargs)
         self._logger.warning(self._format_message(msg), extra={"markup": True})
 
     def error(self, msg: str, **kwargs: Any) -> None:
-        ctx = {**self._context, **kwargs}
+        self._context.update(kwargs)
         self._logger.error(self._format_message(msg), extra={"markup": True})
 
     def exception(self, msg: str, **kwargs: Any) -> None:
-        ctx = {**self._context, **kwargs}
+        self._context.update(kwargs)
         self._logger.exception(self._format_message(msg), extra={"markup": True})
 
     # Convenience methods for skill execution logging
@@ -145,7 +142,9 @@ class SkillLogger:
             f"run_id=[yellow]{run_id}[/] variants={variants}"
         )
 
-    def skill_complete(self, skill: str, run_id: str, success: int, failed: int, duration_ms: int) -> None:
+    def skill_complete(
+        self, skill: str, run_id: str, success: int, failed: int, duration_ms: int
+    ) -> None:
         status = "[green]SUCCESS[/]" if failed == 0 else f"[yellow]PARTIAL[/] ({failed} failed)"
         self.info(
             f"[bold]Completed[/] skill=[green]{skill}[/] "

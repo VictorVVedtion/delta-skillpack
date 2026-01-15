@@ -1,5 +1,6 @@
 """Engine abstraction layer with async execution."""
 from __future__ import annotations
+
 import asyncio
 import shutil
 import time
@@ -7,10 +8,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from .models import (
-    CodexConfig, GeminiConfig, ClaudeConfig,
-    RunResult, SandboxMode, ApprovalMode
-)
+from .models import ClaudeConfig, CodexConfig, GeminiConfig, RunResult
 
 
 @runtime_checkable
@@ -34,10 +32,16 @@ class Engine(Protocol):
 
 class BaseEngine(ABC):
     """Base class with common utilities."""
-    
+
     def __init__(self):
         self._binary: str | None = None
-    
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Engine name identifier."""
+        ...
+
     @property
     def available(self) -> bool:
         return shutil.which(self._binary) is not None if self._binary else False
@@ -63,8 +67,9 @@ class BaseEngine(ABC):
                 timeout=timeout,
             )
             return proc.returncode or 0, stdout.decode(), stderr.decode()
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError:  # noqa: UP041 - needed for Python 3.10 compatibility
             proc.kill()
+            await proc.wait()  # Ensure process is cleaned up
             return -1, "", f"Process timed out after {timeout}s"
         except Exception as e:
             return -1, "", str(e)
@@ -99,16 +104,18 @@ class CodexEngine(BaseEngine):
             )
         
         cmd = ["codex", "exec"]
-        
+
         if self.config.full_auto:
-            cmd += ["--full-auto", "true"]
-        
+            cmd.append("--full-auto")
+
         cmd += ["--sandbox", self.config.sandbox.value]
-        cmd += ["--ask-for-approval", self.config.approval.value]
-        
+
         if self.config.model:
             cmd += ["--model", self.config.model]
-        
+
+        # Extra High reasoning for maximum quality
+        cmd += ["--reasoning-effort", self.config.reasoning_effort.value]
+
         cmd += ["--output-last-message", str(output_file), "-"]
         
         variant_prompt = f"{prompt}\n\n(Variation tag: V{variant})\n"
@@ -209,11 +216,16 @@ class ClaudeEngine(BaseEngine):
             )
         
         cmd = ["claude", "--print"]
-        
+
         if self.config.dangerously_skip_permissions:
             cmd += ["--dangerously-skip-permissions"]
-        
+
         cmd += ["--model", self.config.model]
+
+        # Extended thinking for deeper reasoning
+        if self.config.extended_thinking:
+            cmd += ["--thinking-budget", "high"]
+
         cmd += ["-p", prompt]
         
         returncode, stdout, stderr = await self._run_process(
