@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #1504 | 1:46 AM | 🔵 | Comprehensive Test Suite for SkillPack Components | ~466 |
+| #1537 | 1:53 AM | 🔵 | SkillPack CLI Entry Point Wrapper Script | ~569 |
+| #1511 | 1:49 AM | 🔵 | SkillPack CLI Wrapper Script | ~382 |
 </claude-mem-context>

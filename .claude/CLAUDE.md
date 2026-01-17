@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #1504 | 1:46 AM | 🔵 | Comprehensive Test Suite for SkillPack Components | ~466 |
+| #1534 | 1:51 AM | 🔵 | Delta SkillPack v2 Claude Code Integration Gap Analysis | ~1043 |
+| #1516 | 1:49 AM | 🔵 | Delta SkillPack Local Settings Integration with Superpowers Skills | ~438 |
 </claude-mem-context>

@@ -91,10 +91,14 @@ class TestClaudeConfig:
         config = ClaudeConfig()
         assert config.model == "claude-sonnet-4-5-20250929"
         assert config.timeout_seconds == 600
-        assert config.dangerously_skip_permissions is False
+        # Default is True for faster automated execution (skip permission prompts)
+        assert config.dangerously_skip_permissions is True
+        assert config.extended_thinking is True
 
     def test_custom_values(self, sample_claude_config: ClaudeConfig):
+        # Fixture explicitly sets False to test override capability
         assert sample_claude_config.dangerously_skip_permissions is False
+        assert sample_claude_config.model == "claude-sonnet-4-5-20250929"
 
 
 class TestOutputConfig:

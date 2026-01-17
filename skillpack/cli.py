@@ -106,6 +106,12 @@ def list_skills(ctx):
     console.print(table)
 
 
+@cli.command("hello")
+def hello():
+    """Print a friendly greeting."""
+    click.echo("Hello from SkillPack!")
+
+
 def add_common_options(f):
     """Decorator to add common skill options."""
     f = click.option("--run-id", help="Custom run ID")(f)

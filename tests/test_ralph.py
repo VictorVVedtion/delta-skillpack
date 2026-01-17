@@ -13,7 +13,7 @@ from skillpack.models import (
     StoryType,
     UserStory,
 )
-from skillpack.ralph import BrowserVerifier, MemoryManager, QualityVerifier
+from skillpack.ralph import DevServerManager, MemoryManager, PlaywrightMCPBridge, QualityVerifier
 
 # =============================================================================
 # Model Tests
@@ -315,24 +315,25 @@ class TestQualityVerifier:
 
 
 # =============================================================================
-# Browser Verifier Tests
+# Browser Verification Tests
 # =============================================================================
 
 
-class TestBrowserVerifier:
-    """Tests for BrowserVerifier."""
+def _unused_port() -> int:
+    return 65535
+
+
+class TestPlaywrightMCPBridge:
+    """Tests for PlaywrightMCPBridge."""
 
     @pytest.fixture
-    def browser(self, tmp_path):
-        """Create a browser verifier with temp directory."""
-        return BrowserVerifier(tmp_path)
+    def bridge(self, tmp_path):
+        """Create a Playwright MCP bridge with temp directory."""
+        memory = MemoryManager(tmp_path)
+        return PlaywrightMCPBridge(tmp_path, memory)
 
-    def test_creates_screenshots_dir(self, browser):
-        """Browser verifier should create screenshots directory."""
-        assert browser.screenshots_dir.exists()
-
-    def test_build_checklist(self, browser):
-        """Test building verification checklist."""
+    def test_build_verification_prompt(self, bridge):
+        """Prompt should include story context and acceptance criteria."""
         story = UserStory(
             id="STORY-001",
             title="UI Test",
@@ -340,16 +341,41 @@ class TestBrowserVerifier:
             type=StoryType.UI,
             acceptance_criteria=["Button visible", "Form submits"],
         )
-        checklist = browser._build_checklist(story)
-        assert "Button visible" in checklist
-        assert "Form submits" in checklist
-        assert "Standard UI Checks" in checklist
+        prompt = bridge._build_verification_prompt(story, "http://localhost:3000")
+        assert "STORY-001" in prompt
+        assert "Button visible" in prompt
+        assert "Form submits" in prompt
+
+    def test_parse_verification_result(self, bridge, tmp_path):
+        """Parse JSON verification output."""
+        output_file = tmp_path / "result.json"
+        output_file.write_text('{"success": true, "message": "OK"}', encoding="utf-8")
+        success, message = bridge._parse_verification_result(output_file)
+        assert success is True
+        assert message == "OK"
 
     @pytest.mark.asyncio
-    async def test_check_server_not_running(self, browser):
+    async def test_check_server_not_running(self, bridge):
         """Server check should return False if not running."""
-        result = await browser._check_server("http://localhost:9999")
+        port = _unused_port()
+        result = await bridge._check_server(f"http://localhost:{port}")
         assert result is False
+
+
+# =============================================================================
+# Dev Server Manager Tests
+# =============================================================================
+
+
+class TestDevServerManager:
+    """Tests for DevServerManager."""
+
+    @pytest.mark.asyncio
+    async def test_is_running_false_on_unused_port(self, tmp_path):
+        """is_running should return False on an unused port."""
+        port = _unused_port()
+        manager = DevServerManager(tmp_path, port=port)
+        assert await manager.is_running() is False
 
 
 # =============================================================================

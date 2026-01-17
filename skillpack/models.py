@@ -43,10 +43,16 @@ class GeminiConfig(BaseModel):
 
 
 class ClaudeConfig(BaseModel):
-    """Claude Code CLI integration."""
+    """Claude Code CLI integration.
+
+    Note: dangerously_skip_permissions defaults to True for automated workflows.
+    Workflow configs (plan.json, review.json) can override to False for safety.
+    """
     model: str = "claude-sonnet-4-5-20250929"
     timeout_seconds: int = 600
-    dangerously_skip_permissions: bool = False
+    # WARNING: True skips permission prompts - useful for automation but use with caution.
+    # Workflow JSON configs (workflows/*.json) can override this to False for safety.
+    dangerously_skip_permissions: bool = True
     extended_thinking: bool = True  # Enable extended thinking for deeper reasoning
 
 
@@ -134,6 +140,36 @@ class SkillpackConfig(BaseModel):
 # =============================================================================
 # Ralph - Industrial Automation Development System
 # =============================================================================
+
+
+class StepRetryConfig(BaseModel):
+    """Configuration for step-level retry behavior."""
+
+    max_attempts: int = 3
+    backoff_seconds: float = 5.0
+    exponential_backoff: bool = True
+    retryable_errors: list[str] = ["rate_limit", "timeout", "network"]
+
+
+class RalphConfig(BaseModel):
+    """Configuration for Ralph engine selection."""
+
+    # Engine routing for skill steps
+    use_claude_for_plan: bool = True       # Use Claude Opus 4.5 for planning
+    use_claude_for_review: bool = True     # Use Claude Opus 4.5 for review
+    codex_for_implement: bool = True       # Use Codex GPT-5.2 for implementation
+    gemini_for_ui: bool = True             # Use Gemini 3 Pro for UI design
+
+    # Claude config for plan/review steps
+    claude_model: str = "claude-opus-4-5-20251101"
+    claude_extended_thinking: bool = True
+    claude_timeout_seconds: int = 600
+
+    # Execution settings
+    auto_commit: bool = True               # Auto commit successful stories
+    max_story_attempts: int = 3            # Max retries per story
+    iteration_delay_seconds: float = 2.0   # Delay between iterations
+    step_retry: StepRetryConfig = Field(default_factory=StepRetryConfig)
 
 
 class StoryType(str, Enum):

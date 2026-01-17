@@ -113,8 +113,8 @@ class CodexEngine(BaseEngine):
         if self.config.model:
             cmd += ["--model", self.config.model]
 
-        # Extra High reasoning for maximum quality
-        cmd += ["--reasoning-effort", self.config.reasoning_effort.value]
+        # Note: reasoning_effort is set via model selection (o3 models support extended reasoning)
+        # Codex CLI doesn't have a --reasoning-effort flag, use -c for config if needed
 
         cmd += ["--output-last-message", str(output_file), "-"]
         
@@ -222,9 +222,8 @@ class ClaudeEngine(BaseEngine):
 
         cmd += ["--model", self.config.model]
 
-        # Extended thinking for deeper reasoning
-        if self.config.extended_thinking:
-            cmd += ["--thinking-budget", "high"]
+        # Note: extended_thinking is enabled via model selection (opus models support it)
+        # Claude CLI doesn't have a --thinking-budget flag
 
         cmd += ["-p", prompt]
         

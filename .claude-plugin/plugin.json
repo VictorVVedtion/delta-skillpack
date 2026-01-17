@@ -1,0 +1,31 @@
+{
+  "name": "delta-skillpack",
+  "version": "2.0.0",
+  "description": "Multi-engine AI workflow orchestrator for Claude Code",
+  "author": "RiverBit",
+  "license": "MIT",
+  "type": "local",
+  "capabilities": ["skills", "commands", "hooks"],
+  "engines": {
+    "claude": "Claude Opus 4.5 - Deep reasoning for planning and review",
+    "codex": "Codex GPT-5.2 - Code implementation",
+    "gemini": "Gemini 3 Pro - UI/UX design"
+  },
+  "skills": [
+    "delta:plan",
+    "delta:implement",
+    "delta:review",
+    "delta:ui",
+    "delta:ralph-init",
+    "delta:ralph-start",
+    "delta:ralph-status"
+  ],
+  "commands": [
+    "ralph-loop",
+    "cancel-ralph"
+  ],
+  "hooks": {
+    "SessionStart": "hooks/session-start.sh",
+    "Stop": "hooks/stop-hook.sh"
+  }
+}

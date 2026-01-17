@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -48,10 +50,16 @@ class MemoryManager:
     def save_prd(self, prd: PRD) -> None:
         """Save PRD to disk."""
         prd_file = self.ralph_dir / "prd.json"
-        prd_file.write_text(
-            prd.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
+        fd, tmp_path = tempfile.mkstemp(dir=self.ralph_dir, prefix="prd.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(prd.model_dump_json(indent=2))
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+            os.replace(tmp_path, prd_file)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     # =========================================================================
     # Session Management

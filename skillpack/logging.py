@@ -1,7 +1,9 @@
 """Structured logging with Rich integration."""
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -167,6 +169,47 @@ class SkillLogger:
 
     def pipeline_step(self, step: int, total: int, skill: str) -> None:
         self.info(f"[bold]Pipeline[/] [{step}/{total}] → [cyan]{skill}[/]")
+
+
+class StructuredLogger:
+    """Structured logger for JSONL event storage."""
+
+    def __init__(self, log_dir: Path):
+        self.log_dir = log_dir
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.events: list[dict[str, Any]] = []
+
+    def log_event(self, event_type: str, data: dict[str, Any], level: str = "info") -> None:
+        """Record a structured event to a JSONL file."""
+        now = datetime.now()
+        event = {
+            "timestamp": now.isoformat(),
+            "type": event_type,
+            "level": level,
+            **data,
+        }
+        self.events.append(event)
+
+        log_file = self.log_dir / f"events_{now.strftime('%Y%m%d')}.jsonl"
+        with log_file.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event) + "\n")
+
+    def log_metric(
+        self, metric_name: str, value: float, tags: dict[str, Any] | None = None
+    ) -> None:
+        """Record a metric event."""
+        self.log_event("metric", {"metric": metric_name, "value": value, "tags": tags or {}})
+
+    def get_summary(self) -> dict[str, Any]:
+        """Get an execution summary for recorded events."""
+        from collections import Counter
+
+        return {
+            "total_events": len(self.events),
+            "by_type": dict(Counter(e.get("type") for e in self.events)),
+            "by_level": dict(Counter(e.get("level") for e in self.events)),
+            "error_events": [e for e in self.events if e.get("level") == "error"],
+        }
 
 
 # Global logger instance
