@@ -1,37 +1,206 @@
 # Delta SkillPack v2
 
-> Modern workflow orchestrator for terminal AI agents: **Codex GPT-5.2**, **Gemini 3 Pro**, and **Claude Opus 4.5**.
+> **Multi-Engine AI Workflow Orchestration** for Claude Code, Codex GPT-5.2, and Gemini 3 Pro
+> _Transform terminal AI agents into repeatable, versioned, git-safe development workflows_
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/tests-191%20passed-brightgreen.svg" alt="191 tests passed">
+  <img src="https://img.shields.io/badge/tests-192%20passed-brightgreen.svg" alt="192 tests passed">
+  <img src="https://img.shields.io/badge/engines-3%20SOTA%20models-purple.svg" alt="3 SOTA Models">
 </p>
 
-## Why SkillPack?
+<p align="center">
+  <b>Keywords:</b> Claude Code Skills | AI Coding Assistant | Multi-Model Orchestration | PRD-Driven Development | Autonomous Code Generation | Terminal AI Agent Framework
+</p>
 
-Transform ad-hoc prompts into **repeatable, versioned, auditable workflows** with **multi-engine orchestration**:
+---
+
+## What is Delta SkillPack?
+
+Delta SkillPack is a **skill-based workflow orchestrator** that routes tasks to the best AI engine:
+
+| Task Type | Engine | Model | Capability |
+|-----------|--------|-------|------------|
+| **Planning** | Claude | Opus 4.5 | Extended Thinking for deep architecture analysis |
+| **Implementation** | Codex | GPT-5.2 | Extra High reasoning for code generation |
+| **UI/UX Design** | Gemini | 3 Pro | Visual understanding with Vercel guidelines |
+| **Code Review** | Claude | Opus 4.5 | Extended Thinking for thorough review |
+| **Automation** | Ralph | Multi-engine | PRD-driven autonomous development loops |
 
 ```bash
-# Before: Manual, single-engine, inconsistent
-codex exec "implement this feature"
+# Before: Ad-hoc, single-engine, inconsistent
+codex exec "implement auth"
 
-# After: Multi-engine, parallel plans, git-safe, tracked
-skill plan "implement this feature"   # → Claude Opus 4.5 generates 5 plans
-skill implement -f plan_3.md          # → Codex GPT-5.2 Extra High executes
-skill run review "check the code"     # → Claude Opus 4.5 Extended Thinking
-skill run ui "mobile layout"          # → Gemini 3 Pro with Vercel Guidelines
-
-# NEW: Industrial Automation (Ralph)
-skill ralph init "Add user authentication with OAuth"
-skill ralph start  # → Autonomous PRD-driven development
+# After: Multi-engine, git-safe, tracked, auditable
+skill plan "implement auth"              # Claude Opus 4.5 → 5 variant plans
+skill implement -f plan_3.md             # Codex GPT-5.2 → code generation
+skill run review                         # Claude Opus 4.5 → code review
 ```
 
-## Key Innovation: Multi-Engine Orchestration
+---
+
+## Capabilities (What It CAN Do)
+
+### Core Skills
+
+| Skill | Engine | Description |
+|-------|--------|-------------|
+| `skill plan` | Claude Opus 4.5 | Generate 5 implementation plans with Extended Thinking |
+| `skill implement` | Codex GPT-5.2 | Execute code from plan with Extra High reasoning |
+| `skill run review` | Claude Opus 4.5 | Deep code review with Extended Thinking |
+| `skill run ui` | Gemini 3 Pro | UI/UX specs following Vercel Web Interface Guidelines |
+
+### Ralph Automation (PRD-Driven Development)
+
+| Capability | Description |
+|------------|-------------|
+| **PRD Generation** | Auto-decompose tasks into atomic User Stories |
+| **Pipeline Selection** | Route stories to appropriate skill chains by type |
+| **Quality Gates** | Automatic pytest + ruff verification |
+| **Git Integration** | Auto-branch, auto-commit passing stories |
+| **Self-Healing** | Classify errors and apply remediation strategies |
+| **Knowledge Learning** | Extract patterns from success/failure for improvement |
+
+### Infrastructure Features
+
+- **Async Parallel Execution** - Run up to 5 variants concurrently
+- **Git Safety** - Auto-branch (`skill/<name>/<run_id>`) + auto-stash
+- **Type-Safe Config** - Pydantic v2 models with validation
+- **Rich Terminal UI** - Progress bars, colored output, tables
+- **Pipeline Support** - Chain skills: `plan → implement → review`
+- **Extensible** - Add custom workflows via JSON + prompt templates
+
+---
+
+## Limitations (What It CANNOT Do)
+
+### Technical Limitations
+
+| Limitation | Reason |
+|------------|--------|
+| **No real-time collaboration** | CLI-based, single-user operation |
+| **Requires external CLI tools** | Depends on `codex`, `gemini`, `claude` binaries |
+| **No IDE integration** | Terminal-only (no VS Code/JetBrains plugins) |
+| **No cloud deployment** | Local execution only |
+| **Network-dependent** | Requires API connectivity to AI providers |
+
+### Scope Limitations
+
+| What It Won't Do | Why |
+|------------------|-----|
+| **Replace human judgment** | AI outputs require human review for critical decisions |
+| **Handle production deployments** | Development tool only, not CI/CD pipeline |
+| **Manage secrets/credentials** | No built-in secrets management |
+| **Auto-push to remote** | Safety: requires manual push after review |
+| **Bypass security reviews** | Quality gates are advisory, not enforcement |
+
+### Model Limitations
+
+| Model | Limitation |
+|-------|------------|
+| Claude Opus 4.5 | Context window limits, may truncate large codebases |
+| Codex GPT-5.2 | Sandbox restrictions, limited file system access |
+| Gemini 3 Pro | Best for visual/UI tasks, less optimal for pure logic |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+```bash
+# Required: Python 3.10+
+python --version  # Python 3.10+
+
+# Required: Node.js for CLI tools
+node --version    # Node.js 18+
+
+# Required: Git
+git --version
+```
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/user/delta-skillpack-v2.git
+cd delta-skillpack-v2
+
+# Install Python package
+pip install -e .
+
+# Install AI CLI tools
+npm i -g @openai/codex           # Codex GPT-5.2
+npm i -g @google/gemini-cli      # Gemini 3 Pro
+npm i -g @anthropic-ai/claude-code  # Claude Code
+
+# Authenticate (one-time setup)
+codex login
+# gemini: uses OAuth automatically
+# claude: uses API key or OAuth
+```
+
+### Verify Installation
+
+```bash
+# Check all dependencies
+skill doctor
+```
+
+### Basic Usage
+
+```bash
+cd /path/to/your/repo
+
+# Generate 5 implementation plans
+skill plan "Add user authentication with OAuth"
+
+# Pick best plan and implement
+skill implement -f .skillpack/runs/xxx/plans/plan_3.md
+
+# Code review
+skill run review
+
+# UI design spec
+skill run ui "Mobile-responsive login form"
+```
+
+---
+
+## Commands Reference
+
+### Core Commands
+
+| Command | Alias | Description | Engine |
+|---------|-------|-------------|--------|
+| `skill doctor` | `d` | Check environment setup | - |
+| `skill plan <task>` | `p` | Generate 5 implementation plans | Claude Opus 4.5 |
+| `skill implement -f <plan>` | `i` | Execute plan with code generation | Codex GPT-5.2 |
+| `skill run review` | - | Deep code review | Claude Opus 4.5 |
+| `skill run ui <task>` | `u` | Generate UI/UX specification | Gemini 3 Pro |
+| `skill pipeline <skills...>` | - | Chain multiple skills | varies |
+| `skill history` | `h` | Show recent runs | - |
+| `skill list` | `ls` | List available skills | - |
+
+### Ralph Automation Commands
+
+| Command | Description |
+|---------|-------------|
+| `skill ralph init <task>` | Initialize PRD from task description |
+| `skill ralph init -f <file>` | Load existing PRD JSON file |
+| `skill ralph status` | Show PRD execution status |
+| `skill ralph start` | Start autonomous development loop |
+| `skill ralph start --dry-run` | Preview execution without changes |
+| `skill ralph cancel` | Cancel running automation |
+
+---
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      SkillPack Orchestrator                              │
+│                      Delta SkillPack Orchestrator                        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐      │
@@ -46,390 +215,236 @@ skill ralph start  # → Autonomous PRD-driven development
 │                                                                          │
 │   ┌─────────────────────────────────────────────────────────────┐      │
 │   │                    Ralph Automation                          │      │
-│   │         PRD-Driven Autonomous Development Loop               │      │
-│   │   Story → Skill Pipeline → Verify → Commit → Next Story     │      │
+│   │         PRD → Stories → Pipelines → Verify → Commit          │      │
 │   └─────────────────────────────────────────────────────────────┘      │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+### Module Structure
 
-- 🚀 **Async Parallel Execution** - Generate 5 plans concurrently
-- 🧠 **SOTA Models** - Opus 4.5 Extended Thinking, GPT-5.2 Extra High, Gemini 3 Pro
-- 🤖 **Ralph Automation** - PRD-driven autonomous development loops
-- 🔒 **Git Safety** - Auto-branch + stash before changes
-- 🎨 **Rich Terminal UI** - Progress bars, colored output
-- 📦 **Pipeline Support** - Chain skills: `plan → implement → review`
-- 🌐 **Vercel UI Guidelines** - Industry-standard web interface patterns
-- 🔌 **Extensible Engines** - Codex, Gemini, Claude (plugin architecture)
-- ⚙️ **Type-Safe Config** - Pydantic v2 models, `.skillpackrc`
-- 🪝 **Claude Code Hooks** - Quality gates, change tracking
-
-## Quick Start
-
-### Installation
-
-```bash
-# From source
-git clone https://github.com/VictorVVedtion/delta-skillpack.git
-cd delta-skillpack
-pip install -e .
-
-# Required CLI tools
-npm i -g @openai/codex       # Codex CLI
-npm i -g @google/gemini-cli  # Gemini CLI
-npm i -g @anthropic-ai/claude-code  # Claude Code
-
-# Authenticate each
-codex login
-# gemini uses OAuth automatically
-# claude uses API key or OAuth
 ```
-
-### Basic Usage
-
-```bash
-cd /path/to/your/repo
-
-# Check environment
-skill doctor
-
-# Generate 5 implementation plans (Claude Opus 4.5)
-skill plan "Add candlestick chart to Trade page"
-
-# Pick a plan and implement (Codex GPT-5.2 Extra High)
-skill implement -f .skillpack/runs/xxx/plans/plan_3.md
-
-# Code review (Claude Opus 4.5 Extended Thinking)
-skill run review "Review the recent changes"
-
-# Generate UI spec (Gemini 3 Pro + Vercel Guidelines)
-skill run ui "Mobile layout for Trade page"
-
-# Run full pipeline
-skill pipeline plan implement review "Add user authentication"
+skillpack/
+├── models.py       # Pydantic v2 models (302 LOC)
+├── engines.py      # Engine abstraction layer (263 LOC)
+├── core.py         # SkillRunner orchestrator (468 LOC)
+├── logging.py      # Rich structured logging (200+ LOC)
+├── cli.py          # Click CLI with aliases (729 LOC)
+└── ralph/          # Autonomous development system
+    ├── orchestrator.py  # Story pipeline dispatcher (680 LOC)
+    ├── memory.py        # 4-channel persistence (188 LOC)
+    ├── verify.py        # Quality gates (128 LOC)
+    ├── browser.py       # Playwright MCP integration (141 LOC)
+    ├── dev_server.py    # Dev server lifecycle (106 LOC)
+    ├── self_heal.py     # Error classification (164 LOC)
+    ├── learning.py      # Knowledge extraction (110 LOC)
+    └── dashboard.py     # Rich live monitoring (64 LOC)
 ```
-
-## Commands
-
-| Command | Alias | Description | Engine |
-|---------|-------|-------------|--------|
-| `skill doctor` | `d` | Check environment | - |
-| `skill plan <task>` | `p` | Generate plans (5 variants) | Claude Opus 4.5 |
-| `skill implement -f <plan>` | `i` | Execute a plan | Codex GPT-5.2 |
-| `skill run review <scope>` | - | Code review | Claude Opus 4.5 |
-| `skill run ui <task>` | `u` | Generate UI spec | Gemini 3 Pro |
-| `skill run <name> <task>` | `r` | Run any workflow | varies |
-| `skill pipeline <skills...>` | - | Chain skills | varies |
-| `skill history` | `h` | Show recent runs | - |
-| `skill list` | `ls` | List available skills | - |
 
 ---
 
-## 🤖 Ralph - Industrial Automation
+## Ralph: PRD-Driven Automation
 
-Ralph is the autonomous development system that transforms a task into working code through PRD-driven iteration.
+Ralph transforms a task description into working, tested code through autonomous iteration.
 
-### Ralph Commands
-
-| Command | Description |
-|---------|-------------|
-| `skill ralph init <task>` | Initialize PRD from task description |
-| `skill ralph init -f <file>` | Load existing PRD JSON file |
-| `skill ralph status` | Show PRD execution status |
-| `skill ralph start` | Start automation loop |
-| `skill ralph start --dry-run` | Preview execution plan |
-| `skill ralph next-story --json` | Get next story (for scripts) |
-| `skill ralph story-status --story-id <id>` | Check story status |
-| `skill ralph cancel` | Cancel running loop |
-
-### How Ralph Works
+### How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     Industrial Automation Pipeline                       │
-│                                                                          │
-│  ┌─────────────┐                                                        │
-│  │ 1. Task     │  User: "Add K-line chart with time range selector"    │
-│  └──────┬──────┘                                                        │
-│         │                                                                │
-│         ▼                                                                │
-│  ┌─────────────┐  Auto-generate structured PRD                          │
-│  │ 2. PRD      │  Split into atomic User Stories                        │
-│  │    Init     │  Mark types: feature/ui/refactor/test/docs             │
-│  └──────┬──────┘                                                        │
-│         │                                                                │
-│         ▼                                                                │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     Story Execution Loop                         │   │
-│  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ for each story in priority order:                          │ │   │
-│  │  │                                                            │ │   │
-│  │  │   Select pipeline based on story.type:                     │ │   │
-│  │  │   ┌────────────┬─────────────────────────────────────────┐ │ │   │
-│  │  │   │ feature    │ plan → implement → review → verify      │ │ │   │
-│  │  │   │ ui         │ ui → implement → review → browser       │ │ │   │
-│  │  │   │ refactor   │ plan → implement → review → verify      │ │ │   │
-│  │  │   │ test       │ implement → review → verify             │ │ │   │
-│  │  │   │ docs       │ plan → implement → review               │ │ │   │
-│  │  │   └────────────┴─────────────────────────────────────────┘ │ │   │
-│  │  │                                                            │ │   │
-│  │  │   Run quality gates (pytest + ruff)                        │ │   │
-│  │  │   if passed: git commit + mark complete                    │ │   │
-│  │  │   else: retry (max 3 attempts)                             │ │   │
-│  │  └────────────────────────────────────────────────────────────┘ │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│         │                                                                │
-│         ▼                                                                │
-│  ┌─────────────┐                                                        │
-│  │ 3. Complete │  Output: <promise>COMPLETE</promise>                   │
-│  └─────────────┘                                                        │
-└─────────────────────────────────────────────────────────────────────────┘
+Task Description
+       │
+       ▼
+┌──────────────┐
+│  PRD Init    │  Decompose into User Stories with types
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│                   Story Execution Loop                    │
+│                                                          │
+│  for each story in priority order:                       │
+│                                                          │
+│    Select pipeline by story.type:                        │
+│    ┌────────────┬────────────────────────────────────┐  │
+│    │ feature    │ plan → implement → review → verify │  │
+│    │ ui         │ ui → implement → review → browser  │  │
+│    │ refactor   │ plan → implement → review → verify │  │
+│    │ test       │ implement → review → verify        │  │
+│    │ docs       │ plan → implement → review          │  │
+│    └────────────┴────────────────────────────────────┘  │
+│                                                          │
+│    Run quality gates (pytest + ruff)                     │
+│    if passed: git commit + mark complete                 │
+│    else: retry (max 3 attempts) or self-heal             │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────┐
+│   Complete   │  Output: <promise>COMPLETE</promise>
+└──────────────┘
 ```
 
-### Story Types & Pipelines
-
-| Type | When to Use | Skill Pipeline |
-|------|-------------|----------------|
-| `feature` | Backend/logic functionality | plan → implement → review → verify |
-| `ui` | Frontend/visual components | ui → implement → review → browser |
-| `refactor` | Code restructuring | plan → implement → review → verify |
-| `test` | Test coverage addition | implement → review → verify |
-| `docs` | Documentation updates | plan → implement → review |
-
-### Ralph Example
-
-```bash
-# Initialize PRD from task
-skill ralph init "Add user authentication with OAuth support"
-
-# View generated stories
-skill ralph status
-# Output:
-#   PRD: Add user authentication
-#   Stories: 4
-#   - STORY-001 [p0] Set up OAuth provider config (feature)
-#   - STORY-002 [p1] Create login/logout UI components (ui)
-#   - STORY-003 [p1] Implement session management (feature)
-#   - STORY-004 [p2] Add authentication tests (test)
-
-# Start autonomous development
-skill ralph start
-
-# Ralph will automatically:
-# 1. Execute each story through its skill pipeline
-# 2. Run quality gates (pytest + ruff)
-# 3. Commit passing changes
-# 4. Retry failed stories (max 3 times)
-# 5. Output <promise>COMPLETE</promise> when done
-```
-
-### Memory Persistence
-
-Ralph maintains context across iterations:
+### Memory Channels
 
 | Channel | File | Purpose |
 |---------|------|---------|
-| PRD State | `.skillpack/ralph/prd.json` | Task tracking |
-| Progress Log | `.skillpack/ralph/progress.txt` | Learning history |
-| Knowledge Base | `.skillpack/ralph/AGENTS.md` | Pattern accumulation |
-| Git History | `git log` | Code changes |
+| PRD State | `.skillpack/ralph/prd.json` | Task/story tracking |
+| Progress Log | `.skillpack/ralph/progress.txt` | Iteration history |
+| Knowledge Base | `.skillpack/ralph/AGENTS.md` | Learned patterns |
+| Git History | `git log` | Code change audit |
 
 ---
 
-## Skill Configuration
+## Configuration
 
-### plan.json (Claude Opus 4.5 + Extended Thinking)
+### Workflow Definition (workflows/plan.json)
+
 ```json
 {
   "name": "plan",
   "engine": "claude",
   "variants": 5,
+  "prompt_template": "plan.md",
   "claude": {
     "model": "claude-opus-4-5-20251101",
     "timeout_seconds": 600,
-    "extended_thinking": true
+    "extended_thinking": true,
+    "dangerously_skip_permissions": false
+  },
+  "output": {
+    "dir": "plans",
+    "pattern": "plan_{i}.md"
   }
 }
 ```
 
-### implement.json (Codex GPT-5.2 + Extra High Reasoning)
+### Repository Config (.skillpackrc)
+
 ```json
 {
-  "name": "implement",
-  "engine": "codex",
-  "depends_on": "plan",
-  "codex": {
-    "model": "gpt-5.2-codex",
-    "sandbox": "workspace-write",
-    "full_auto": true,
-    "reasoning_effort": "xhigh"
-  }
+  "default_engine": "codex",
+  "auto_stash": true,
+  "auto_branch": true,
+  "parallel_variants": 5,
+  "log_level": "info"
 }
 ```
 
-### review.json (Claude Opus 4.5 + Extended Thinking)
-```json
-{
-  "name": "review",
-  "engine": "claude",
-  "claude": {
-    "model": "claude-opus-4-5-20251101",
-    "timeout_seconds": 600,
-    "extended_thinking": true
-  }
-}
-```
+---
 
-### ui.json (Gemini 3 Pro + Vercel Guidelines)
-```json
-{
-  "name": "ui",
-  "engine": "gemini",
-  "gemini": {
-    "model": "gemini-3-pro",
-    "timeout_seconds": 300
-  }
-}
-```
+## Safety & Security
 
-## Output Structure
+### Built-in Protections
 
-```
-.skillpack/
-├── runs/                           # Per-run outputs
-│   └── 20250115_143022/
-│       ├── meta.json               # Run metadata
-│       ├── plans/
-│       │   ├── plan_1.md           # Claude Opus 4.5
-│       │   ├── plan_2.md
-│       │   └── ...
-│       ├── implement/
-│       │   └── summary.md          # Codex GPT-5.2
-│       ├── review/
-│       │   └── review.md           # Claude Opus 4.5
-│       └── ui/
-│           └── ui_spec.md          # Gemini 3 Pro
-│
-└── ralph/                          # Ralph automation data
-    ├── prd.json                    # PRD task list
-    ├── session.json                # Session state
-    ├── progress.txt                # Learning log
-    ├── AGENTS.md                   # Knowledge base
-    ├── screenshots/                # UI verification
-    └── iterations/                 # Per-iteration outputs
-        └── 001/
-            ├── plan_output.md
-            ├── implement_output.md
-            └── review_output.md
-```
+| Protection | Description |
+|------------|-------------|
+| **Git branching** | Auto-creates `skill/<name>/<run_id>` branch |
+| **Auto-stash** | Preserves uncommitted changes before operations |
+| **Sandbox modes** | `read-only`, `workspace-write`, `danger-full-access` |
+| **Quality gates** | pytest + ruff must pass before commit |
+| **Max retries** | Stories retry max 3 times before failing |
+| **No auto-push** | Requires manual push after review |
 
-## Architecture
+### Permission Levels
 
-```
-skillpack/
-├── models.py       # Pydantic v2 models (WorkflowDef, PRD, UserStory, etc.)
-├── engines.py      # Engine abstraction (Codex, Gemini, Claude)
-├── core.py         # Orchestrator (SkillRunner, GitManager, Pipeline)
-├── logging.py      # Structured logging with Rich
-├── cli.py          # Click CLI with Rich UI + Ralph commands
-└── ralph/          # Industrial automation module
-    ├── memory.py       # 4-channel persistence
-    ├── orchestrator.py # Skill pipeline dispatcher
-    ├── verify.py       # Quality gates (pytest + ruff)
-    └── browser.py      # Playwright MCP integration
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `read-only` | No file modifications | Planning, review |
+| `workspace-write` | Project files only | Implementation |
+| `danger-full-access` | Full system access | Requires explicit flag |
 
-workflows/          # Skill definitions (JSON)
-prompts/            # Prompt templates (Markdown)
-scripts/            # Automation scripts
-    └── ralph-loop.sh   # External loop for context refresh
-```
-
-## Safety Defaults
-
-- ✅ New git branch: `skill/<skill>/<run_id>`
-- ✅ Auto-stash dirty changes
-- ✅ Plan skill: read-only sandbox
-- ✅ Implement skill: workspace-write (with approval)
-- ✅ Quality gates for sensitive files
-- ✅ Max 3 retry attempts per story
-- ❌ No auto-push/merge
-- ❌ No `danger-full-access` by default
+---
 
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (192 tests)
 pytest tests/ -v
 
-# 191 tests covering:
-# - Models (36 tests)
-# - Engines (30 tests)
-# - Core logic (34 tests)
-# - CLI (40 tests)
-# - Logging (20 tests)
-# - Ralph (31 tests)
-
-# Coverage
+# With coverage
 pytest tests/ --cov=skillpack --cov-report=term-missing
+
+# Lint check
+ruff check skillpack/
 ```
 
-## Extending
+### Test Coverage
 
-### Add Custom Workflows
+| Module | Tests | Coverage |
+|--------|-------|----------|
+| models.py | 36 | 95% |
+| engines.py | 30 | 80% |
+| core.py | 34 | 75% |
+| cli.py | 40 | 85% |
+| logging.py | 20 | 90% |
+| ralph/* | 32 | 45% |
 
-1. Create `workflows/myskill.json`:
-```json
-{
-  "name": "myskill",
-  "engine": "claude",
-  "variants": 1,
-  "prompt_template": "myskill.md",
-  "claude": {
-    "model": "claude-opus-4-5-20251101",
-    "extended_thinking": true
-  },
-  "output": {
-    "dir": "myskill",
-    "pattern": "output.md"
-  }
-}
-```
+---
 
-2. Create `prompts/myskill.md`:
-```markdown
-# Role
-Your role description.
+## FAQ
 
-# Goal
-{{TASK}}
+### Q: How is this different from raw Codex/Claude usage?
 
-# Output Format
-...
-```
+**A:** SkillPack adds:
+- Multi-engine routing (best model for each task)
+- Git safety (branching, stashing)
+- Parallel variant generation
+- Quality gates (pytest + ruff)
+- Auditable run history
+- PRD-driven automation (Ralph)
 
-3. Run:
-```bash
-skill run myskill "do something"
-```
+### Q: Can I use my own AI models?
+
+**A:** Currently supports Codex, Gemini, and Claude. The engine abstraction layer allows adding new engines by implementing the `Engine` protocol.
+
+### Q: Is this production-ready?
+
+**A:** It's designed for development workflows. Production deployment pipelines should use established CI/CD tools.
+
+### Q: How do I handle API rate limits?
+
+**A:** Built-in step-level retry with exponential backoff handles transient rate limits. Configure `StepRetryConfig` for custom behavior.
+
+---
+
+## Comparison
+
+| Feature | Delta SkillPack | Raw CLI | Other Tools |
+|---------|-----------------|---------|-------------|
+| Multi-engine routing | ✅ | ❌ | Varies |
+| Git safety | ✅ Auto-branch/stash | ❌ Manual | Varies |
+| Parallel variants | ✅ Up to 5 | ❌ | ❌ |
+| Quality gates | ✅ pytest + ruff | ❌ | Varies |
+| PRD automation | ✅ Ralph | ❌ | ❌ |
+| Run history | ✅ .skillpack/runs | ❌ | Varies |
+| Type-safe config | ✅ Pydantic v2 | ❌ | Varies |
+
+---
 
 ## Requirements
 
-- Python 3.10+
-- Git
-- Codex CLI (`npm i -g @openai/codex`)
-- Gemini CLI (`npm i -g @google/gemini-cli`)
-- Claude Code (`npm i -g @anthropic-ai/claude-code`)
+- **Python**: 3.10+
+- **Node.js**: 18+ (for CLI tools)
+- **Git**: Any recent version
+- **CLI Tools**:
+  - `codex` (`npm i -g @openai/codex`)
+  - `gemini` (`npm i -g @google/gemini-cli`)
+  - `claude` (`npm i -g @anthropic-ai/claude-code`)
+
+---
 
 ## License
 
-MIT
+MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
-  <b>Delta SkillPack v2</b> - Multi-Engine Workflow Orchestration
-  <br>
+  <b>Delta SkillPack v2</b><br>
+  <sub>Multi-Engine AI Workflow Orchestration</sub><br>
   <sub>Claude Opus 4.5 • Codex GPT-5.2 • Gemini 3 Pro • Ralph Automation</sub>
+</p>
+
+<p align="center">
+  <i>Built for developers who want repeatable, auditable AI-assisted development</i>
 </p>
