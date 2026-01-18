@@ -1,0 +1,10 @@
+{
+  "knowledge": {
+    "default_notebook": "ffa73340-e818-4bcc-9809-a58e62e52982",
+    "auto_query": true
+  },
+  "output": {
+    "current_dir": ".skillpack/current",
+    "history_dir": ".skillpack/history"
+  }
+}
