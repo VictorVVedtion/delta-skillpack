@@ -1,22 +1,19 @@
-# Skill: skill-do
-
-智能任务执行器 - 自动分析任务复杂度并选择最优执行路径
-
-## 元数据
-
-```yaml
-name: skill-do
+---
+name: delta:do
 description: 智能任务执行 - 自动路由，实时反馈，错误恢复
 version: 2.1.0
-triggers:
-  - /skill-do
-  - /do
-arguments:
-  task: 任务描述（必需）
-  -q, --quick: 跳过规划，直接实现
-  -d, --deep: 强制 Ralph 自动化模式
-  -e, --explain: 仅显示路由决策，不执行
-```
+---
+
+# /do - 智能任务执行器
+
+自动分析任务复杂度并选择最优执行路径
+
+## 参数
+
+- `task`: 任务描述（必需）
+- `-q, --quick`: 跳过规划，直接实现
+- `-d, --deep`: 强制 Ralph 自动化模式
+- `-e, --explain`: 仅显示路由决策，不执行
 
 ---
 
