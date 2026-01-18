@@ -1,4 +1,5 @@
 """Engine abstraction layer with async execution."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,13 +15,13 @@ from .models import ClaudeConfig, CodexConfig, GeminiConfig, RunResult
 @runtime_checkable
 class Engine(Protocol):
     """Protocol for execution engines."""
-    
+
     @property
     def name(self) -> str: ...
-    
+
     @property
     def available(self) -> bool: ...
-    
+
     async def execute(
         self,
         repo: Path,
@@ -45,7 +46,7 @@ class BaseEngine(ABC):
     @property
     def available(self) -> bool:
         return shutil.which(self._binary) is not None if self._binary else False
-    
+
     async def _run_process(
         self,
         cmd: list[str],
@@ -77,16 +78,16 @@ class BaseEngine(ABC):
 
 class CodexEngine(BaseEngine):
     """OpenAI Codex CLI engine."""
-    
+
     def __init__(self, config: CodexConfig):
         super().__init__()
         self._binary = "codex"
         self.config = config
-    
+
     @property
     def name(self) -> str:
         return "codex"
-    
+
     async def execute(
         self,
         repo: Path,
@@ -95,14 +96,14 @@ class CodexEngine(BaseEngine):
         variant: int = 1,
     ) -> RunResult:
         start = time.perf_counter()
-        
+
         if not self.available:
             return RunResult(
                 variant=variant,
                 success=False,
                 error="codex not found. Install: npm i -g @openai/codex",
             )
-        
+
         cmd = ["codex", "exec"]
 
         if self.config.full_auto:
@@ -117,15 +118,15 @@ class CodexEngine(BaseEngine):
         # Codex CLI doesn't have a --reasoning-effort flag, use -c for config if needed
 
         cmd += ["--output-last-message", str(output_file), "-"]
-        
+
         variant_prompt = f"{prompt}\n\n(Variation tag: V{variant})\n"
-        
+
         returncode, stdout, stderr = await self._run_process(
             cmd, repo, variant_prompt, self.config.timeout_seconds
         )
-        
+
         duration = int((time.perf_counter() - start) * 1000)
-        
+
         return RunResult(
             variant=variant,
             success=returncode == 0,
@@ -139,16 +140,16 @@ class CodexEngine(BaseEngine):
 
 class GeminiEngine(BaseEngine):
     """Google Gemini CLI engine."""
-    
+
     def __init__(self, config: GeminiConfig):
         super().__init__()
         self._binary = "gemini"
         self.config = config
-    
+
     @property
     def name(self) -> str:
         return "gemini"
-    
+
     async def execute(
         self,
         repo: Path,
@@ -157,25 +158,25 @@ class GeminiEngine(BaseEngine):
         variant: int = 1,
     ) -> RunResult:
         start = time.perf_counter()
-        
+
         if not self.available:
             return RunResult(
                 variant=variant,
                 success=False,
                 error="gemini not found. Install: npm i -g @google/gemini-cli",
             )
-        
+
         cmd = ["gemini", "--prompt", prompt]
-        
+
         returncode, stdout, stderr = await self._run_process(
             cmd, repo, timeout=self.config.timeout_seconds
         )
-        
+
         duration = int((time.perf_counter() - start) * 1000)
-        
+
         if returncode == 0:
             output_file.write_text(stdout, encoding="utf-8")
-        
+
         return RunResult(
             variant=variant,
             success=returncode == 0,
@@ -189,16 +190,16 @@ class GeminiEngine(BaseEngine):
 
 class ClaudeEngine(BaseEngine):
     """Claude Code CLI engine (future)."""
-    
+
     def __init__(self, config: ClaudeConfig):
         super().__init__()
         self._binary = "claude"
         self.config = config
-    
+
     @property
     def name(self) -> str:
         return "claude"
-    
+
     async def execute(
         self,
         repo: Path,
@@ -207,14 +208,14 @@ class ClaudeEngine(BaseEngine):
         variant: int = 1,
     ) -> RunResult:
         start = time.perf_counter()
-        
+
         if not self.available:
             return RunResult(
                 variant=variant,
                 success=False,
                 error="claude not found. Install: npm i -g @anthropic-ai/claude-code",
             )
-        
+
         cmd = ["claude", "--print"]
 
         if self.config.dangerously_skip_permissions:
@@ -226,16 +227,16 @@ class ClaudeEngine(BaseEngine):
         # Claude CLI doesn't have a --thinking-budget flag
 
         cmd += ["-p", prompt]
-        
+
         returncode, stdout, stderr = await self._run_process(
             cmd, repo, timeout=self.config.timeout_seconds
         )
-        
+
         duration = int((time.perf_counter() - start) * 1000)
-        
+
         if returncode == 0:
             output_file.write_text(stdout, encoding="utf-8")
-        
+
         return RunResult(
             variant=variant,
             success=returncode == 0,
@@ -254,10 +255,10 @@ def get_engine(engine_type: str, config: dict | None = None) -> Engine:
         "gemini": (GeminiEngine, GeminiConfig),
         "claude": (ClaudeEngine, ClaudeConfig),
     }
-    
+
     if engine_type not in engines:
         raise ValueError(f"Unknown engine: {engine_type}")
-    
+
     engine_cls, config_cls = engines[engine_type]
     cfg = config_cls(**(config or {}))
     return engine_cls(cfg)

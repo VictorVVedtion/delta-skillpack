@@ -5,8 +5,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/tests-192%20passed-brightgreen.svg" alt="192 tests passed">
-  <img src="https://img.shields.io/badge/code-3633%20LOC-informational.svg" alt="3633 LOC">
+  <img src="https://img.shields.io/badge/tests-249%20passed-brightgreen.svg" alt="249 tests passed">
+  <img src="https://img.shields.io/badge/code-3663%20LOC-informational.svg" alt="3663 LOC">
 </p>
 
 ---
@@ -35,8 +35,8 @@ Delta SkillPack automatically routes each task type to the optimal engine:
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Source Code | 3,633 LOC | Python 3.10+, async/await |
-| Test Coverage | 192 tests | 85% average coverage |
+| Source Code | 3,663 LOC | Python 3.10+, async/await |
+| Test Coverage | 249 tests | 66% average coverage |
 | Supported Engines | 3 | Claude, Codex, Gemini |
 | Parallel Variants | Up to 5 | Concurrent plan generation |
 | Story Pipeline Types | 5 | feature, ui, refactor, test, docs |
@@ -282,6 +282,45 @@ Optional `.skillpackrc` in project root:
   "parallel_variants": 5
 }
 ```
+
+---
+
+## NotebookLM Knowledge Integration
+
+Delta SkillPack integrates with [NotebookLM](https://notebooklm.google.com/) as a fifth knowledge channel, providing zero-hallucination, citation-backed context for development tasks.
+
+### Quick Start
+
+```bash
+# Use knowledge integration with any skill
+skill plan "Implement auth" --notebook <notebook_id>
+skill implement "Add feature" --notebook <notebook_id>
+skill run review --notebook <notebook_id>
+```
+
+### Knowledge Hooks
+
+Each workflow type queries relevant notebooks automatically:
+
+| Workflow | Notebook Types | Queries |
+|----------|---------------|---------|
+| `plan` | architecture, patterns | Architecture recommendations, existing patterns |
+| `implement` | api, patterns | API docs, implementation examples |
+| `review` | standards | Coding standards, security guidelines |
+| `ui` | patterns | UI design patterns, component guidelines |
+| `research` | all | Background info, existing solutions, constraints |
+
+### New Workflows
+
+| Workflow | Purpose |
+|----------|---------|
+| `research` | Gather knowledge before planning |
+| `verify-spec` | Validate implementation against specs |
+| `learn` | Extract reusable patterns from code |
+
+### Self-Healing Integration
+
+When Ralph encounters errors, it automatically queries the troubleshooting notebook for known solutions before applying generic recovery strategies.
 
 ---
 

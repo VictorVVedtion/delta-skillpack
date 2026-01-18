@@ -1,4 +1,5 @@
 """Pytest fixtures and configuration for SkillPack tests."""
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ def temp_repo() -> Generator[Path, None, None]:
         repo = Path(tmpdir)
         # Initialize git repo
         import subprocess
+
         subprocess.run(["git", "init"], cwd=repo, capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
@@ -123,6 +125,7 @@ def sample_run_result() -> RunResult:
 def sample_run_meta(sample_run_result: RunResult) -> RunMeta:
     """Sample run metadata."""
     from datetime import datetime
+
     return RunMeta(
         run_id="20250130_120000",
         skill="plan",
@@ -160,6 +163,7 @@ def mock_codex_binary():
 @pytest.fixture
 def mock_process_success():
     """Mock successful subprocess execution."""
+
     async def mock_run(*args, **kwargs):
         return (0, "Success output", "")
 
@@ -173,6 +177,7 @@ def mock_process_success():
 @pytest.fixture
 def mock_process_failure():
     """Mock failed subprocess execution."""
+
     async def mock_run(*args, **kwargs):
         return (1, "", "Error: Command failed")
 

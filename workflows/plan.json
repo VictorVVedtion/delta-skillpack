@@ -13,5 +13,14 @@
   "output": {
     "dir": "plans",
     "pattern": "plan_{i}.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["architecture", "patterns"],
+    "queries": [
+      "What is the recommended architecture for {{TASK}}?",
+      "Are there existing patterns or ADRs related to {{TASK}}?"
+    ]
   }
 }

@@ -1,4 +1,5 @@
 """Unit tests for skillpack.logging module."""
+
 from __future__ import annotations
 
 import logging

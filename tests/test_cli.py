@@ -1,4 +1,5 @@
 """Integration tests for skillpack.cli module."""
+
 from __future__ import annotations
 
 import json
@@ -193,9 +194,7 @@ class TestImplementCommand:
             started_at=datetime.now(),
             completed_at=datetime.now(),
             git=GitCheckpoint(enabled=False),
-            results=[
-                RunResult(variant=1, success=True, output_file=Path("/tmp/out.md"))
-            ],
+            results=[RunResult(variant=1, success=True, output_file=Path("/tmp/out.md"))],
             success_count=1,
         )
 
@@ -286,9 +285,7 @@ class TestPipelineCommand:
             started_at=datetime.now(),
             completed_at=datetime.now(),
             git=GitCheckpoint(enabled=False),
-            results=[
-                RunResult(variant=1, success=True, output_file=Path("/tmp/plan_1.md"))
-            ],
+            results=[RunResult(variant=1, success=True, output_file=Path("/tmp/plan_1.md"))],
             success_count=1,
         )
 
@@ -427,4 +424,3 @@ class TestErrorHandling:
         with runner.isolated_filesystem():
             result = runner.invoke(cli, ["plan", "Test", "--sandbox", "invalid"])
         assert result.exit_code != 0
-

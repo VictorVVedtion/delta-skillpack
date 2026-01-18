@@ -16,9 +16,10 @@ Use this skill when:
 ## What It Does
 
 1. Analyzes recent code changes (git diff)
-2. Reviews against best practices
-3. Checks for bugs, security issues, performance problems
-4. Generates detailed review report
+2. **Queries NotebookLM for coding standards and security guidelines** (if configured)
+3. Reviews against best practices and project standards
+4. Checks for bugs, security issues, performance problems
+5. Generates detailed review report
 
 ## Invocation
 
@@ -31,7 +32,24 @@ skill run review --files "src/auth.py,src/models.py"
 
 # With custom scope
 skill run review --scope "last 3 commits"
+
+# With NotebookLM knowledge integration
+skill run review --notebook <notebook_id>
+
+# Disable knowledge queries
+skill run review --no-knowledge
 ```
+
+## Knowledge Integration
+
+When `--notebook` is provided, the skill automatically queries NotebookLM for:
+- Coding standards and security guidelines for the project
+- Common issues to check during code review
+
+This ensures reviews are consistent with project-specific standards.
+
+### Supported Notebook Types
+- `standards` - Coding standards, security guidelines
 
 ## Execution Instructions
 

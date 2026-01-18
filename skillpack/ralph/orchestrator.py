@@ -3,6 +3,7 @@
 Routes stories to appropriate skill pipelines based on story type.
 Now with ClaudeEngine integration for plan and review steps.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +16,7 @@ from ..engines import ClaudeEngine
 from ..models import (
     PRD,
     ClaudeConfig,
+    QueryContext,
     RalphConfig,
     SkillStep,
     StepRetryConfig,
@@ -23,6 +25,7 @@ from ..models import (
 from .browser import PlaywrightMCPBridge
 from .dev_server import DevServerManager
 from .memory import MemoryManager
+from .notebooklm import NotebookLMBridge
 from .verify import QualityVerifier
 
 if TYPE_CHECKING:
@@ -55,6 +58,16 @@ class StoryOrchestrator:
             self.claude_engine = ClaudeEngine(claude_config)
         else:
             self.claude_engine = None
+
+        # Initialize NotebookLM knowledge engine
+        if self.config.use_notebooklm and self.config.notebooklm.enabled:
+            self.knowledge_engine: NotebookLMBridge | None = NotebookLMBridge(
+                repo,
+                self.memory,
+                self.config.notebooklm,
+            )
+        else:
+            self.knowledge_engine = None
 
     async def execute_story(self, story: UserStory) -> bool:
         """Execute a story through its skill pipeline.
@@ -176,7 +189,42 @@ class StoryOrchestrator:
         """Run plan skill for architecture analysis.
 
         Uses ClaudeEngine directly if configured, otherwise falls back to SkillRunner.
+        Optionally queries NotebookLM for architectural knowledge before planning.
         """
+        # Query knowledge before planning if enabled
+        if self.knowledge_engine and self.config.knowledge_query_before_plan:
+            context = QueryContext(
+                story_id=story.id,
+                story_type=story.type,
+                current_step=SkillStep.PLAN,
+            )
+            try:
+                knowledge = await self.knowledge_engine.batch_query(
+                    [
+                        f"What is the recommended architecture for: {story.title}",
+                        f"Are there existing patterns for: {story.description[:200]}",
+                    ],
+                    context,
+                )
+                if knowledge:
+                    formatted = self.knowledge_engine.format_context(knowledge)
+                    if formatted:
+                        story.step_outputs["knowledge_context"] = formatted
+                        self.memory.append_progress(
+                            self._current_iteration,
+                            story.id,
+                            "KNOWLEDGE:PLAN",
+                            f"Retrieved {len(knowledge)} knowledge items for planning",
+                        )
+            except Exception as e:
+                # Graceful degradation - log but continue without knowledge
+                self.memory.append_progress(
+                    self._current_iteration,
+                    story.id,
+                    "KNOWLEDGE:WARN",
+                    f"Failed to fetch knowledge for plan: {e!s}",
+                )
+
         prompt = self._build_story_prompt(story, "plan")
 
         # Use Claude directly if configured and available
@@ -264,7 +312,37 @@ class StoryOrchestrator:
         """Run review skill for code quality analysis.
 
         Uses ClaudeEngine directly if configured, otherwise falls back to SkillRunner.
+        Optionally queries NotebookLM for coding standards before reviewing.
         """
+        # Query knowledge for review standards if enabled
+        if self.knowledge_engine and self.config.knowledge_query_before_review:
+            context = QueryContext(
+                story_id=story.id,
+                story_type=story.type,
+                current_step=SkillStep.REVIEW,
+            )
+            try:
+                knowledge = await self.knowledge_engine.batch_query(
+                    [
+                        "What are the coding standards for this project?",
+                        "What security guidelines should be followed?",
+                    ],
+                    context,
+                )
+                if knowledge:
+                    formatted = self.knowledge_engine.format_context(knowledge)
+                    if formatted:
+                        story.step_outputs["review_standards"] = formatted
+                        self.memory.append_progress(
+                            self._current_iteration,
+                            story.id,
+                            "KNOWLEDGE:REVIEW",
+                            f"Retrieved {len(knowledge)} knowledge items for review",
+                        )
+            except Exception:
+                # Graceful degradation - continue without knowledge
+                pass
+
         prompt = self._build_review_prompt(story)
 
         # Use Claude directly if configured and available
@@ -397,9 +475,7 @@ Please provide a thorough code review. Mark any blocking issues with "BLOCKING:"
 
         # Run custom verification commands if specified
         if result.success and story.verification_commands:
-            custom_result = await self.verifier.run_custom_commands(
-                story.verification_commands
-            )
+            custom_result = await self.verifier.run_custom_commands(story.verification_commands)
             if not custom_result[0]:
                 story.last_error = f"Custom verification failed: {custom_result[1][:200]}"
                 return False
@@ -448,7 +524,11 @@ Please provide a thorough code review. Mark any blocking issues with "BLOCKING:"
 
         ac_list = "\n".join(f"- {ac}" for ac in story.acceptance_criteria)
 
-        return f"""# Story: {story.id}
+        # Get knowledge context if available
+        knowledge_context = story.step_outputs.get("knowledge_context", "")
+        review_standards = story.step_outputs.get("review_standards", "")
+
+        prompt = f"""# Story: {story.id}
 ## {story.title}
 
 {story.description}
@@ -469,6 +549,15 @@ Please provide a thorough code review. Mark any blocking issues with "BLOCKING:"
 ### Git Summary
 {git_summary}
 """
+
+        # Append knowledge context if available
+        if knowledge_context:
+            prompt += f"\n{knowledge_context}\n"
+
+        if review_standards:
+            prompt += f"\n{review_standards}\n"
+
+        return prompt
 
     def _save_state(self) -> None:
         """Save current PRD state to disk."""
@@ -517,17 +606,13 @@ Please provide a thorough code review. Mark any blocking issues with "BLOCKING:"
 
     def get_parallel_stories(self, prd: PRD, max_parallel: int = 3) -> list[UserStory]:
         """Get stories that can be executed in parallel (no dependencies)."""
-        pending = [
-            s for s in prd.stories
-            if not s.passes and s.attempts < s.max_attempts
-        ]
+        pending = [s for s in prd.stories if not s.passes and s.attempts < s.max_attempts]
 
         parallel: list[UserStory] = []
         for story in sorted(pending, key=lambda s: (s.priority, s.attempts)):
             # Check dependencies
             deps_ok = all(
-                any(d.id == dep and d.passes for d in prd.stories)
-                for dep in story.depends_on
+                any(d.id == dep and d.passes for d in prd.stories) for dep in story.depends_on
             )
             if not deps_ok:
                 continue

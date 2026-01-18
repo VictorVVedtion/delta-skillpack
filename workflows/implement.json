@@ -15,5 +15,14 @@
   "output": {
     "dir": "implement",
     "pattern": "summary.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["api", "patterns"],
+    "queries": [
+      "What API documentation or interface specs exist for {{TASK}}?",
+      "Are there code examples or implementation patterns for similar features?"
+    ]
   }
 }

@@ -1,4 +1,5 @@
 """Unit tests for skillpack.engines module."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -144,9 +145,7 @@ class TestCodexEngine:
         assert engine._binary == "codex"
 
     @pytest.mark.asyncio
-    async def test_execute_unavailable(
-        self, sample_codex_config: CodexConfig, temp_dir: Path
-    ):
+    async def test_execute_unavailable(self, sample_codex_config: CodexConfig, temp_dir: Path):
         """Test execution when codex is not installed."""
         with patch("shutil.which", return_value=None):
             engine = CodexEngine(sample_codex_config)
@@ -160,9 +159,7 @@ class TestCodexEngine:
             assert "codex not found" in result.error
 
     @pytest.mark.asyncio
-    async def test_execute_success(
-        self, sample_codex_config: CodexConfig, temp_dir: Path
-    ):
+    async def test_execute_success(self, sample_codex_config: CodexConfig, temp_dir: Path):
         """Test successful codex execution."""
         with patch("shutil.which", return_value="/usr/bin/codex"):
             engine = CodexEngine(sample_codex_config)
@@ -182,9 +179,7 @@ class TestCodexEngine:
                 assert result.duration_ms >= 0
 
     @pytest.mark.asyncio
-    async def test_execute_failure(
-        self, sample_codex_config: CodexConfig, temp_dir: Path
-    ):
+    async def test_execute_failure(self, sample_codex_config: CodexConfig, temp_dir: Path):
         """Test failed codex execution."""
         with patch("shutil.which", return_value="/usr/bin/codex"):
             engine = CodexEngine(sample_codex_config)
@@ -235,9 +230,7 @@ class TestGeminiEngine:
         assert engine._binary == "gemini"
 
     @pytest.mark.asyncio
-    async def test_execute_unavailable(
-        self, sample_gemini_config: GeminiConfig, temp_dir: Path
-    ):
+    async def test_execute_unavailable(self, sample_gemini_config: GeminiConfig, temp_dir: Path):
         """Test execution when gemini is not installed."""
         with patch("shutil.which", return_value=None):
             engine = GeminiEngine(sample_gemini_config)
@@ -251,9 +244,7 @@ class TestGeminiEngine:
             assert "gemini not found" in result.error
 
     @pytest.mark.asyncio
-    async def test_execute_writes_output(
-        self, sample_gemini_config: GeminiConfig, temp_dir: Path
-    ):
+    async def test_execute_writes_output(self, sample_gemini_config: GeminiConfig, temp_dir: Path):
         """Test that successful execution writes output file."""
         output_file = temp_dir / "ui_spec.md"
 
@@ -287,9 +278,7 @@ class TestClaudeEngine:
         assert engine._binary == "claude"
 
     @pytest.mark.asyncio
-    async def test_execute_unavailable(
-        self, sample_claude_config: ClaudeConfig, temp_dir: Path
-    ):
+    async def test_execute_unavailable(self, sample_claude_config: ClaudeConfig, temp_dir: Path):
         """Test execution when claude is not installed."""
         with patch("shutil.which", return_value=None):
             engine = ClaudeEngine(sample_claude_config)
@@ -356,9 +345,7 @@ class TestEngineIntegration:
     """Integration tests for engine execution patterns."""
 
     @pytest.mark.asyncio
-    async def test_variant_tag_injection(
-        self, sample_codex_config: CodexConfig, temp_dir: Path
-    ):
+    async def test_variant_tag_injection(self, sample_codex_config: CodexConfig, temp_dir: Path):
         """Test that variant tags are injected into prompts."""
         captured_prompt = None
 
@@ -383,9 +370,7 @@ class TestEngineIntegration:
         assert "Test prompt" in captured_prompt
 
     @pytest.mark.asyncio
-    async def test_output_truncation(
-        self, sample_codex_config: CodexConfig, temp_dir: Path
-    ):
+    async def test_output_truncation(self, sample_codex_config: CodexConfig, temp_dir: Path):
         """Test that long output is truncated."""
         with patch("shutil.which", return_value="/usr/bin/codex"):
             engine = CodexEngine(sample_codex_config)

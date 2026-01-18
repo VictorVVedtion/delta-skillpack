@@ -1,0 +1,26 @@
+{
+  "name": "learn",
+  "description": "Continuous learning - Extract patterns from successful implementations",
+  "engine": "claude",
+  "variants": 1,
+  "prompt_template": "learn.md",
+  "task_type": "learning",
+  "claude": {
+    "model": "claude-sonnet-4-5-20250929",
+    "timeout_seconds": 300,
+    "dangerously_skip_permissions": false
+  },
+  "output": {
+    "dir": "learn",
+    "pattern": "patterns.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["patterns", "domain"],
+    "queries": [
+      "What patterns have been successfully used in similar tasks?",
+      "What lessons learned exist from previous implementations?"
+    ]
+  }
+}

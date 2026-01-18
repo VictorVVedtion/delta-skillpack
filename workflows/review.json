@@ -14,5 +14,14 @@
   "output": {
     "dir": "review",
     "pattern": "review.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["standards"],
+    "queries": [
+      "What are the coding standards and security guidelines for this project?",
+      "What common issues should be checked during code review?"
+    ]
   }
 }

@@ -16,9 +16,10 @@ Use this skill when:
 ## What It Does
 
 1. Analyzes UI requirements
-2. Considers existing design patterns in the codebase
-3. Generates UI specification following Vercel guidelines
-4. Outputs design document with component specs
+2. **Queries NotebookLM for UI patterns and component guidelines** (if configured)
+3. Considers existing design patterns in the codebase
+4. Generates UI specification following Vercel guidelines
+5. Outputs design document with component specs
 
 ## Invocation
 
@@ -28,7 +29,24 @@ skill ui "Design a user settings page with profile, preferences, and security ta
 
 # With framework context
 skill ui "Create login form" --framework react --style tailwind
+
+# With NotebookLM knowledge integration
+skill ui "Design settings page" --notebook <notebook_id>
+
+# Disable knowledge queries
+skill ui "Design settings page" --no-knowledge
 ```
+
+## Knowledge Integration
+
+When `--notebook` is provided, the skill automatically queries NotebookLM for:
+- UI design patterns and component guidelines for the project
+- Existing UI components or design specs to follow
+
+This ensures UI designs are consistent with project design system.
+
+### Supported Notebook Types
+- `patterns` - Design patterns, component guidelines
 
 ## Execution Instructions
 

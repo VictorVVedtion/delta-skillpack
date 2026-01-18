@@ -1,4 +1,5 @@
 """Playwright MCP integration for UI story verification."""
+
 from __future__ import annotations
 
 import asyncio

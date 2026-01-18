@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Delta SkillPack CLI - Modern terminal workflow orchestrator."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,12 +22,12 @@ console = get_console()
 
 class AliasedGroup(click.Group):
     """Support command aliases."""
-    
+
     def get_command(self, ctx, cmd_name):
         # Aliases
         aliases = {
             "p": "plan",
-            "i": "implement", 
+            "i": "implement",
             "impl": "implement",
             "u": "ui",
             "d": "doctor",
@@ -83,6 +84,7 @@ def cli(ctx, repo: str, output_json: bool, quiet: bool, log_level: str, log_file
 def doctor_cmd(ctx):
     """Check environment and list available skills."""
     from .core import doctor as run_doctor
+
     run_doctor(ctx.obj["repo"])
 
 
@@ -95,14 +97,14 @@ def list_skills(ctx):
     table.add_column("Engine")
     table.add_column("Variants")
     table.add_column("Output Dir")
-    
+
     for wf_file in sorted(WORKFLOWS.glob("*.json")):
         try:
             wf = load_workflow(wf_file.stem)
             table.add_row(wf.name, wf.engine.value, str(wf.variants), wf.output.dir)
         except Exception:
             pass
-    
+
     console.print(table)
 
 
@@ -126,6 +128,17 @@ def add_common_options(f):
     f = click.option("--model", "-m", help="Model override")(f)
     f = click.option("--full-auto", is_flag=True, help="Enable full-auto mode")(f)
     f = click.option("--dry-run", is_flag=True, help="Show what would run without executing")(f)
+    # NotebookLM knowledge integration
+    f = click.option(
+        "--notebook",
+        type=str,
+        help="NotebookLM notebook ID for knowledge queries (enables knowledge-enhanced execution)",
+    )(f)
+    f = click.option(
+        "--no-knowledge",
+        is_flag=True,
+        help="Disable NotebookLM knowledge queries even if configured",
+    )(f)
     return f
 
 
@@ -139,7 +152,11 @@ def run_skill_command(
     """Common skill execution logic."""
     repo = ctx.obj["repo"]
     dry_run = kwargs.pop("dry_run", False)
-    
+
+    # Extract knowledge options
+    notebook_id = kwargs.pop("notebook", None)
+    no_knowledge = kwargs.pop("no_knowledge", False)
+
     # Build engine overrides
     engine_overrides = {}
     if kwargs.get("sandbox"):
@@ -148,20 +165,31 @@ def run_skill_command(
         engine_overrides["model"] = kwargs["model"]
     if kwargs.get("full_auto"):
         engine_overrides["full_auto"] = True
-    
+
     if dry_run:
         wf = load_workflow(skill)
-        console.print(Panel(f"""
+        knowledge_status = "enabled" if notebook_id else "disabled"
+        console.print(
+            Panel(
+                f"""
 [bold]Dry Run: {skill}[/]
 • Engine: {wf.engine.value}
-• Variants: {kwargs.get('variants') or wf.variants}
+• Variants: {kwargs.get("variants") or wf.variants}
 • Output: .skillpack/runs/<id>/{wf.output.dir}/
+• Knowledge: {knowledge_status}
 • Task: {task[:100]}...
-        """.strip(), border_style="yellow"))
+        """.strip(),
+                border_style="yellow",
+            )
+        )
         return
-    
-    runner = SkillRunner(repo)
-    
+
+    runner = SkillRunner(
+        repo,
+        notebook_id=notebook_id,
+        no_knowledge=no_knowledge,
+    )
+
     async def execute():
         meta = await runner.run(
             skill=skill,
@@ -175,7 +203,7 @@ def run_skill_command(
         )
         runner.display_results(meta)
         return meta
-    
+
     return asyncio.run(execute())
 
 
@@ -185,7 +213,7 @@ def run_skill_command(
 @click.pass_context
 def plan(ctx, task: str, **kwargs):
     """Generate implementation plans (read-only, parallel variants).
-    
+
     \b
     Examples:
       skill plan "Add candlestick chart to Trade page"
@@ -194,7 +222,7 @@ def plan(ctx, task: str, **kwargs):
     """
     if not task:
         task = Prompt.ask("[cyan]Enter task description")
-    
+
     run_skill_command(ctx, "plan", task, **kwargs)
 
 
@@ -206,7 +234,7 @@ def plan(ctx, task: str, **kwargs):
 @click.pass_context
 def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs):
     """Implement a selected plan (workspace-write).
-    
+
     \b
     Examples:
       skill implement -f .skillpack/runs/xxx/plans/plan_1.md
@@ -214,7 +242,7 @@ def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs
       skill implement "Apply the auth plan" -f plan.md
     """
     repo = ctx.obj["repo"]
-    
+
     # Interactive plan selection
     if interactive and not plan_file:
         runs_dir = repo / ".skillpack" / "runs"
@@ -226,14 +254,16 @@ def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs
                 for i, p in enumerate(plans, 1):
                     preview = p.read_text()[:100].replace("\n", " ")
                     console.print(f"  {i}. {p.relative_to(repo)} - {preview}...")
-                
-                choice = Prompt.ask("Select plan", choices=[str(i) for i in range(1, len(plans)+1)])
-                plan_file = str(plans[int(choice)-1])
-    
+
+                choice = Prompt.ask(
+                    "Select plan", choices=[str(i) for i in range(1, len(plans) + 1)]
+                )
+                plan_file = str(plans[int(choice) - 1])
+
     if not plan_file and not task:
         console.print("[yellow]Provide --plan-file or task description")
         return
-    
+
     run_skill_command(ctx, "implement", task, plan_file=plan_file, **kwargs)
 
 
@@ -243,7 +273,7 @@ def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs
 @click.pass_context
 def ui(ctx, task: str, **kwargs):
     """Generate UI specification (Gemini, headless).
-    
+
     \b
     Examples:
       skill ui "Mobile layout for Trade page"
@@ -251,7 +281,7 @@ def ui(ctx, task: str, **kwargs):
     """
     if not task:
         task = Prompt.ask("[cyan]Enter UI task description")
-    
+
     run_skill_command(ctx, "ui", task, **kwargs)
 
 
@@ -263,7 +293,7 @@ def ui(ctx, task: str, **kwargs):
 @click.pass_context
 def run(ctx, skill_name: str, task: str, plan_file: str | None, **kwargs):
     """Run any workflow by name.
-    
+
     \b
     Examples:
       skill run review "Check code quality"
@@ -279,21 +309,21 @@ def run(ctx, skill_name: str, task: str, plan_file: str | None, **kwargs):
 @click.pass_context
 def pipeline(ctx, skills: tuple[str, ...], task: str, **kwargs):
     """Run multiple skills in sequence.
-    
+
     \b
     Examples:
       skill pipeline plan implement "Add user auth"
       skill pipeline plan implement ui "Build dashboard"
     """
     repo = ctx.obj["repo"]
-    
+
     # Build engine overrides
     engine_overrides = {}
     if kwargs.get("sandbox"):
         engine_overrides["sandbox"] = SandboxMode(kwargs["sandbox"])
-    
+
     runner = SkillRunner(repo)
-    
+
     async def execute():
         return await run_pipeline(
             runner,
@@ -305,7 +335,7 @@ def pipeline(ctx, skills: tuple[str, ...], task: str, **kwargs):
             no_git_stash=kwargs.get("no_stash", False),
             **engine_overrides,
         )
-    
+
     asyncio.run(execute())
 
 
@@ -316,21 +346,22 @@ def history(ctx, limit: int):
     """Show recent skill runs."""
     repo = ctx.obj["repo"]
     runs_dir = repo / ".skillpack" / "runs"
-    
+
     if not runs_dir.exists():
         console.print("[yellow]No runs found")
         return
-    
+
     table = Table(title="Recent Runs", box=box.ROUNDED)
     table.add_column("Run ID")
     table.add_column("Skill")
     table.add_column("Engine")
     table.add_column("Success")
     table.add_column("Duration")
-    
+
     import json
+
     runs = sorted(runs_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]
-    
+
     for run_dir in runs:
         meta_file = run_dir / "meta.json"
         if meta_file.exists():
@@ -347,7 +378,7 @@ def history(ctx, limit: int):
                 )
             except Exception:
                 table.add_row(run_dir.name, "?", "?", "?", "?")
-    
+
     console.print(table)
 
 
@@ -358,17 +389,18 @@ def show(ctx, run_id: str):
     """Show details of a specific run."""
     repo = ctx.obj["repo"]
     run_dir = repo / ".skillpack" / "runs" / run_id
-    
+
     if not run_dir.exists():
         console.print(f"[red]Run not found: {run_id}")
         return
-    
+
     meta_file = run_dir / "meta.json"
     if meta_file.exists():
         from rich.syntax import Syntax
+
         content = meta_file.read_text()
         console.print(Syntax(content, "json", theme="monokai"))
-    
+
     # List outputs
     console.print("\n[bold]Outputs:")
     for f in run_dir.rglob("*.md"):
@@ -536,13 +568,18 @@ def ralph_start(ctx, max_iterations: int, dry_run: bool):
         return
 
     if dry_run:
-        console.print(Panel(f"""
+        console.print(
+            Panel(
+                f"""
 [bold]Dry Run: Ralph Automation[/]
 • PRD: {prd.id}
 • Stories: {len(prd.stories)}
 • Max Iterations: {max_iterations}
 • Would execute until complete or max iterations reached
-        """.strip(), border_style="yellow"))
+        """.strip(),
+                border_style="yellow",
+            )
+        )
         return
 
     console.print("[bold]Starting Ralph automation loop[/]")

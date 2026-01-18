@@ -16,9 +16,10 @@ Use this skill when:
 ## What It Does
 
 1. Reads the implementation plan (if provided)
-2. Executes code changes using Codex GPT-5.2
-3. Creates/modifies files as needed
-4. Outputs summary to `.skillpack/runs/<id>/implement/`
+2. **Queries NotebookLM for API docs and implementation patterns** (if configured)
+3. Executes code changes using Codex GPT-5.2
+4. Creates/modifies files as needed
+5. Outputs summary to `.skillpack/runs/<id>/implement/`
 
 ## Invocation
 
@@ -31,7 +32,25 @@ skill implement "Add error handling to API endpoints"
 
 # With options
 skill implement "Task" --full-auto --sandbox workspace-write
+
+# With NotebookLM knowledge integration
+skill implement "Task" --notebook <notebook_id>
+
+# Disable knowledge queries
+skill implement "Task" --no-knowledge
 ```
+
+## Knowledge Integration
+
+When `--notebook` is provided, the skill automatically queries NotebookLM for:
+- API documentation and interface specs for the task
+- Code examples and implementation patterns for similar features
+
+This ensures implementations follow established patterns and use correct APIs.
+
+### Supported Notebook Types
+- `api` - API documentation, interface specs
+- `patterns` - Implementation patterns, code examples
 
 ## Execution Instructions
 

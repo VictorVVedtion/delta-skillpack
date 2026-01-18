@@ -1,4 +1,5 @@
 """Unit tests for skillpack.core module."""
+
 from __future__ import annotations
 
 import json
@@ -428,6 +429,98 @@ class TestSkillRunner:
         # (depends on implement.md template having {{PLAN_TEXT}})
 
 
+class TestSkillRunnerKnowledgeIntegration:
+    """Tests for SkillRunner knowledge integration."""
+
+    def test_init_with_notebook_id(self, temp_repo: Path):
+        """Test runner initialization with notebook ID."""
+        runner = SkillRunner(temp_repo, notebook_id="test-notebook-123")
+        assert runner.notebook_id == "test-notebook-123"
+        assert runner.no_knowledge is False
+
+    def test_init_with_no_knowledge(self, temp_repo: Path):
+        """Test runner initialization with knowledge disabled."""
+        runner = SkillRunner(temp_repo, no_knowledge=True)
+        assert runner.no_knowledge is True
+
+    def test_get_knowledge_engine_returns_none_without_notebook(self, temp_repo: Path):
+        """Test that knowledge engine is None without notebook ID."""
+        runner = SkillRunner(temp_repo)
+        assert runner._get_knowledge_engine() is None
+
+    def test_get_knowledge_engine_returns_none_when_disabled(self, temp_repo: Path):
+        """Test that knowledge engine is None when disabled."""
+        runner = SkillRunner(temp_repo, notebook_id="test", no_knowledge=True)
+        assert runner._get_knowledge_engine() is None
+
+    @pytest.mark.asyncio
+    async def test_query_knowledge_returns_empty_without_engine(self, temp_repo: Path):
+        """Test that knowledge query returns empty string without engine."""
+        from skillpack.models import KnowledgeHooksConfig
+
+        runner = SkillRunner(temp_repo)
+        hooks = KnowledgeHooksConfig(
+            enabled=True,
+            query_before=True,
+            queries=["What is the architecture?"],
+        )
+        result = await runner._query_knowledge(hooks, "test task")
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_query_knowledge_returns_empty_when_disabled(self, temp_repo: Path):
+        """Test that knowledge query returns empty when hooks are disabled."""
+        from skillpack.models import KnowledgeHooksConfig
+
+        runner = SkillRunner(temp_repo, notebook_id="test")
+        hooks = KnowledgeHooksConfig(
+            enabled=False,
+            query_before=True,
+            queries=["What is the architecture?"],
+        )
+        result = await runner._query_knowledge(hooks, "test task")
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_run_injects_knowledge_context(self, temp_repo: Path):
+        """Test that run injects knowledge context into prompt."""
+
+        runner = SkillRunner(temp_repo, notebook_id="test-notebook")
+        captured_prompt = None
+
+        async def mock_execute(repo, prompt, output_file, variant=1):
+            nonlocal captured_prompt
+            captured_prompt = prompt
+            output_file.write_text("content")
+            return RunResult(variant=variant, success=True, output_file=output_file)
+
+        # Mock knowledge query
+        async def mock_query_knowledge(hooks, task):
+            return "## Architecture Knowledge\n\nUse MVC pattern."
+
+        with (
+            patch("skillpack.core.get_engine") as mock_get_engine,
+            patch.object(
+                runner, "_query_knowledge", new=AsyncMock(side_effect=mock_query_knowledge)
+            ),
+        ):
+            mock_engine = MagicMock()
+            mock_engine.execute = AsyncMock(side_effect=mock_execute)
+            mock_get_engine.return_value = mock_engine
+
+            await runner.run(
+                skill="plan",
+                task="Test task",
+                variants=1,
+                no_git_checkpoint=True,
+            )
+
+        # Knowledge context should be appended to prompt
+        assert captured_prompt is not None
+        assert "External Knowledge (from NotebookLM)" in captured_prompt
+        assert "Use MVC pattern" in captured_prompt
+
+
 class TestRunPipeline:
     """Tests for pipeline execution."""
 
@@ -489,9 +582,7 @@ class TestRunPipeline:
                 repo=str(temp_repo),
                 started_at=datetime.now(),
                 git=GitCheckpoint(enabled=False),
-                results=[
-                    RunResult(variant=1, success=False, error="Failed")
-                ],
+                results=[RunResult(variant=1, success=False, error="Failed")],
                 success_count=0,
                 failure_count=1,
             )
@@ -572,9 +663,7 @@ class TestRunPipeline:
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 git=GitCheckpoint(enabled=False),
-                results=[
-                    RunResult(variant=1, success=True, output_file=output_file)
-                ],
+                results=[RunResult(variant=1, success=True, output_file=output_file)],
                 success_count=1,
             )
 
@@ -612,9 +701,7 @@ class TestRunPipeline:
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 git=GitCheckpoint(enabled=False),
-                results=[
-                    RunResult(variant=1, success=True, output_file=output_file)
-                ],
+                results=[RunResult(variant=1, success=True, output_file=output_file)],
                 success_count=1,
             )
 

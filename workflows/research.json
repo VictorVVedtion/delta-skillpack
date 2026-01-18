@@ -1,0 +1,27 @@
+{
+  "name": "research",
+  "description": "Research-first workflow - Query knowledge before planning",
+  "engine": "claude",
+  "variants": 1,
+  "prompt_template": "research.md",
+  "task_type": "research",
+  "claude": {
+    "model": "claude-opus-4-5-20251101",
+    "timeout_seconds": 300,
+    "dangerously_skip_permissions": false
+  },
+  "output": {
+    "dir": "research",
+    "pattern": "research.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["architecture", "patterns", "domain"],
+    "queries": [
+      "What background information exists about {{TASK}}?",
+      "Are there any existing solutions or approaches for {{TASK}}?",
+      "What constraints or requirements should be considered for {{TASK}}?"
+    ]
+  }
+}

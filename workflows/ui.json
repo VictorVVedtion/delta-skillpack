@@ -13,5 +13,14 @@
   "output": {
     "dir": "ui",
     "pattern": "ui_spec.md"
+  },
+  "knowledge_hooks": {
+    "enabled": true,
+    "query_before": true,
+    "notebook_types": ["patterns"],
+    "queries": [
+      "What are the UI design patterns and component guidelines for this project?",
+      "Are there existing UI components or design specs to follow?"
+    ]
   }
 }

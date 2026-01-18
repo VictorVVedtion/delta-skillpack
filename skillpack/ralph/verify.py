@@ -2,6 +2,7 @@
 
 Handles test execution and lint checking as quality gates.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +13,7 @@ from pathlib import Path
 @dataclass
 class VerifyResult:
     """Result of quality verification."""
+
     success: bool
     tests_passed: bool = True
     lint_passed: bool = True
@@ -84,7 +86,9 @@ class QualityVerifier:
         """Run ruff and return (success, output)."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ruff", "check", ".",
+                "ruff",
+                "check",
+                ".",
                 cwd=str(self.repo),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

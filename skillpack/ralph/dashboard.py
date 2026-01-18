@@ -1,4 +1,5 @@
 """Ralph live dashboard for execution status."""
+
 from __future__ import annotations
 
 from rich.layout import Layout
@@ -36,10 +37,7 @@ class RalphDashboard:
 
         completion = self.prd.completion_rate * 100
         self.layout["header"].update(
-            Panel(
-                f"[bold]Ralph Automation - {self.prd.title}[/] | "
-                f"Completion: {completion:.1f}%"
-            )
+            Panel(f"[bold]Ralph Automation - {self.prd.title}[/] | Completion: {completion:.1f}%")
         )
 
         table = Table(title="Stories")

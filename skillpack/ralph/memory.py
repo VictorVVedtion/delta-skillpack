@@ -6,6 +6,7 @@
 - Knowledge Base: .skillpack/ralph/AGENTS.md (append-only)
 - Git History: git log (read-only)
 """
+
 from __future__ import annotations
 
 import json

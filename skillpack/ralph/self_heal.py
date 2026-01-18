@@ -1,17 +1,23 @@
 """Self-healing logic for Ralph automation.
 
 Classifies errors and applies lightweight remediation steps.
+Optionally uses NotebookLM knowledge engine for solution search.
 """
+
 from __future__ import annotations
 
 import asyncio
 import contextlib
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from ..models import UserStory
+from ..models import KnowledgeResponse, NotebookType, QueryContext, UserStory
 from .memory import MemoryManager
 from .verify import QualityVerifier
+
+if TYPE_CHECKING:
+    from .notebooklm import NotebookLMBridge
 
 
 class ErrorCategory(Enum):
@@ -35,6 +41,12 @@ class HealingStrategy:
 
 
 class SelfHealingOrchestrator:
+    """Self-healing orchestrator with optional NotebookLM integration.
+
+    When a knowledge_engine is provided, attempts to search for solutions
+    in the Troubleshooting notebook before falling back to standard strategies.
+    """
+
     STRATEGIES = {
         ErrorCategory.SYNTAX: HealingStrategy(
             ErrorCategory.SYNTAX,
@@ -62,9 +74,15 @@ class SelfHealingOrchestrator:
         ),
     }
 
-    def __init__(self, memory: MemoryManager, verifier: QualityVerifier):
+    def __init__(
+        self,
+        memory: MemoryManager,
+        verifier: QualityVerifier,
+        knowledge_engine: NotebookLMBridge | None = None,
+    ):
         self.memory = memory
         self.verifier = verifier
+        self.knowledge_engine = knowledge_engine
         self._attempts: dict[tuple[str, ErrorCategory], int] = {}
 
     def classify_error(self, error_msg: str) -> ErrorCategory:
@@ -78,8 +96,7 @@ class SelfHealingOrchestrator:
         if "syntax" in message or "invalid syntax" in message:
             return ErrorCategory.SYNTAX
         if any(
-            token in message
-            for token in ("importerror", "modulenotfounderror", "no module named")
+            token in message for token in ("importerror", "modulenotfounderror", "no module named")
         ):
             return ErrorCategory.IMPORT
         if "typeerror" in message or "mypy" in message or "typing" in message:
@@ -101,8 +118,28 @@ class SelfHealingOrchestrator:
         error_msg: str,
         current_iteration: int,
     ) -> bool:
-        """Attempt self-healing based on error classification."""
+        """Attempt self-healing based on error classification.
+
+        When a knowledge_engine is available, first searches for solutions
+        in the Troubleshooting notebook before falling back to standard strategies.
+        """
         category = self.classify_error(error_msg)
+
+        # Try to find solution in knowledge base first
+        if self.knowledge_engine:
+            solution = await self._search_solution(error_msg, category)
+            if solution and solution.confidence >= 0.7:
+                self.memory.append_progress(
+                    current_iteration,
+                    story.id,
+                    "HEAL:KNOWLEDGE",
+                    f"Found solution (confidence={solution.confidence:.2f}): "
+                    f"{solution.summary[:100]}",
+                )
+                story.step_outputs["heal_solution"] = solution.full_text
+                # Continue with standard healing but with knowledge context
+                # The solution can be used by subsequent steps
+
         strategy = self.STRATEGIES.get(category)
         if not strategy:
             self.memory.append_progress(
@@ -145,6 +182,40 @@ class SelfHealingOrchestrator:
         if strategy.action in {"auto_format", "fix_imports"}:
             return await self._run_auto_format()
         return strategy.action in {"regenerate", "analyze_and_fix"}
+
+    async def _search_solution(
+        self,
+        error_msg: str,
+        category: ErrorCategory,
+    ) -> KnowledgeResponse | None:
+        """Search for solution in the Troubleshooting notebook.
+
+        Args:
+            error_msg: The error message to search for
+            category: The classified error category
+
+        Returns:
+            KnowledgeResponse if a solution is found with high confidence, None otherwise
+        """
+        if not self.knowledge_engine:
+            return None
+
+        query = f"How to fix error: {error_msg[:200]}"
+        context = QueryContext(error_category=category.value)
+
+        try:
+            response = await self.knowledge_engine.query(
+                query,
+                context,
+                notebook_hint=NotebookType.TROUBLESHOOTING,
+            )
+            if response.confidence >= 0.7 and not response.error:
+                return response
+        except Exception:
+            # Graceful degradation - return None on any error
+            pass
+
+        return None
 
     async def _run_auto_format(self) -> bool:
         """Run ruff --fix auto format."""
