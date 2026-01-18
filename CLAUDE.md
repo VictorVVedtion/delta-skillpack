@@ -197,6 +197,39 @@ openalpha/
 └── pyproject.toml            # 项目配置
 ```
 
+## MCP 服务器配置
+
+项目使用以下 MCP 服务器实现多模型协作（配置见 `.mcp.json`）：
+
+| 服务器 | 模型 | 用途 |
+|--------|------|------|
+| `codex-cli` | GPT-5.2 (xhigh reasoning) | 代码实现、API 集成、复杂开发 |
+| `gemini-cli` | Gemini 3 Pro Preview | 架构分析、UI/UX、多模态理解 |
+| `notebooklm-mcp` | - | 知识库查询、文档管理 |
+
+### 安装依赖
+
+```bash
+# Codex CLI (官方)
+npm install -g @openai/codex
+
+# Gemini CLI (官方)
+npm install -g @google/gemini-cli
+
+# NotebookLM MCP
+npm install -g notebooklm-mcp
+```
+
+### 模型配置
+
+**Codex** (`~/.codex/config.toml`):
+```toml
+model = "gpt-5.2-codex"
+model_reasoning_effort = "xhigh"
+```
+
+**Gemini**: 默认使用 `gemini-3-pro-preview`（通过 Gemini CLI 配置）
+
 ## 依赖插件
 
 - **delta-skillpack v3.0.0** - 提供 `/do` 命令及相关 skills（已全局安装）

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.schema.json",
+  "mcpServers": {
+    "notebooklm-mcp": {
+      "type": "stdio",
+      "command": "notebooklm-mcp",
+      "args": [],
+      "env": {}
+    },
+    "codex-cli": {
+      "type": "stdio",
+      "command": "codex",
+      "args": ["mcp-server"],
+      "env": {}
+    },
+    "gemini-cli": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-tool"],
+      "env": {}
+    }
+  }
+}
