@@ -41,7 +41,7 @@ class DevServerManager:
                 stderr=asyncio.subprocess.STDOUT,
                 env=env,
             )
-        except Exception:
+        except OSError:
             self._close_log()
             self._process = None
             self._started_by_us = False
@@ -92,7 +92,7 @@ class DevServerManager:
             if hasattr(writer, "wait_closed"):
                 await writer.wait_closed()
             return True
-        except Exception:
+        except (OSError, asyncio.TimeoutError):
             return False
 
     def _ensure_log(self) -> None:

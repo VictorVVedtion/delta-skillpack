@@ -134,7 +134,7 @@ Return ONLY a JSON object (no markdown, no commentary) with this schema:
             if hasattr(writer, "wait_closed"):
                 await writer.wait_closed()
             return True
-        except Exception:
+        except (OSError, asyncio.TimeoutError):
             return False
 
     def _extract_json(self, content: str) -> dict[str, Any] | None:

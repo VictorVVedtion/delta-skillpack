@@ -96,7 +96,7 @@ class KnowledgeLearner:
 
             try:
                 text = path.read_text(encoding="utf-8")
-            except Exception:
+            except OSError:
                 continue
 
             sections: list[tuple[str, str]] = []
@@ -207,7 +207,7 @@ class KnowledgeLearner:
         try:
             with suggestion_file.open("a", encoding="utf-8") as f:
                 f.write(suggestion)
-        except Exception:
+        except OSError:
             # Graceful degradation - don't fail if we can't write suggestions
             pass
 

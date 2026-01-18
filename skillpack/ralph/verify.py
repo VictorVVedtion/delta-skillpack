@@ -79,8 +79,8 @@ class QualityVerifier:
             return proc.returncode == 0, output
         except TimeoutError:
             return False, "Tests timed out after 300s"
-        except Exception as e:
-            return False, str(e)
+        except OSError as e:
+            return False, f"Failed to run tests: {e}"
 
     async def _run_ruff(self) -> tuple[bool, str]:
         """Run ruff and return (success, output)."""
@@ -101,8 +101,8 @@ class QualityVerifier:
             return proc.returncode == 0, output
         except TimeoutError:
             return False, "Lint timed out after 60s"
-        except Exception as e:
-            return False, str(e)
+        except OSError as e:
+            return False, f"Failed to run lint: {e}"
 
     async def run_custom_commands(
         self,
@@ -126,7 +126,7 @@ class QualityVerifier:
                 all_output.append(f"$ {cmd}\n{output}")
                 if proc.returncode != 0:
                     return False, "\n".join(all_output)
-            except Exception as e:
+            except (OSError, asyncio.TimeoutError) as e:
                 all_output.append(f"$ {cmd}\nError: {e}")
                 return False, "\n".join(all_output)
         return True, "\n".join(all_output)

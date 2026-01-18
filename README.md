@@ -125,6 +125,44 @@ codex login
 skill doctor    # Check all dependencies
 ```
 
+### Shell Completion (Optional)
+
+Enable tab completion for faster command input:
+
+**Bash:**
+```bash
+# Add to ~/.bashrc
+source /path/to/delta-skillpack/bin/skill_completion.bash
+
+# Or for current session only
+source bin/skill_completion.bash
+```
+
+**Zsh:**
+```bash
+# Add to ~/.zshrc
+source /path/to/delta-skillpack/bin/skill_completion.zsh
+
+# Or add to fpath for autoload
+fpath=(/path/to/delta-skillpack/bin $fpath)
+autoload -Uz compinit && compinit
+```
+
+**Fish:**
+```bash
+# Copy to Fish completions directory
+cp bin/skill_completion.fish ~/.config/fish/completions/skill.fish
+
+# Or source directly
+source bin/skill_completion.fish
+```
+
+**Features:**
+- Complete all commands: `skill <TAB>` → `plan`, `implement`, `ralph`, etc.
+- Complete Ralph subcommands: `skill ralph <TAB>` → `init`, `status`, `start`, etc.
+- Complete options: `skill plan --<TAB>` → `--dry-run`, `--notebook`, etc.
+- Complete file paths for `-f` and `--plan-file` options
+
 ---
 
 ## Usage Examples

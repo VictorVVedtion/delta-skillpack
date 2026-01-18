@@ -281,7 +281,7 @@ class NotebookLMBridge:
         start_time = datetime.now()
         try:
             response = await self._execute_query(question, notebook_type)
-        except Exception as e:
+        except (OSError, asyncio.TimeoutError, ValueError) as e:
             # 优雅降级
             return KnowledgeResponse(
                 question=question,
@@ -396,7 +396,7 @@ class NotebookLMBridge:
                 notebook_type=notebook_type,
                 error="Query timeout",
             )
-        except Exception as e:
+        except (OSError, asyncio.TimeoutError) as e:
             return KnowledgeResponse(
                 question=question,
                 answer="",

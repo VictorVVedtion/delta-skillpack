@@ -142,7 +142,7 @@ class StoryOrchestrator:
                     return True, None, ""
                 last_error = story.last_error or f"Step {step.value} failed"
                 last_error_action = "FAIL"
-            except Exception as exc:
+            except (OSError, asyncio.TimeoutError, ValueError) as exc:
                 last_error = str(exc)
                 last_error_action = "ERROR"
 
@@ -185,128 +185,197 @@ class StoryOrchestrator:
             return await self._run_browser(story)
         return False
 
+    def _get_iteration_output_dir(self) -> Path:
+        """Get the output directory for current iteration."""
+        output_dir = (
+            self.repo
+            / ".skillpack"
+            / "ralph"
+            / "iterations"
+            / f"{self._current_iteration:03d}"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
+
+    async def _gather_knowledge(
+        self,
+        story: UserStory,
+        step: SkillStep,
+        queries: list[str],
+        output_key: str,
+        log_action: str,
+    ) -> None:
+        """Gather knowledge from NotebookLM for a step.
+
+        Args:
+            story: The user story being processed
+            step: Current skill step (PLAN, REVIEW, etc.)
+            queries: List of knowledge queries to execute
+            output_key: Key to store formatted knowledge in step_outputs
+            log_action: Action name for progress logging
+        """
+        if not self.knowledge_engine:
+            return
+
+        context = QueryContext(
+            story_id=story.id,
+            story_type=story.type,
+            current_step=step,
+        )
+        try:
+            knowledge = await self.knowledge_engine.batch_query(queries, context)
+            if knowledge:
+                formatted = self.knowledge_engine.format_context(knowledge)
+                if formatted:
+                    story.step_outputs[output_key] = formatted
+                    self.memory.append_progress(
+                        self._current_iteration,
+                        story.id,
+                        log_action,
+                        f"Retrieved {len(knowledge)} knowledge items",
+                    )
+        except (OSError, asyncio.TimeoutError, ValueError) as e:
+            self.memory.append_progress(
+                self._current_iteration,
+                story.id,
+                "KNOWLEDGE:WARN",
+                f"Failed to fetch knowledge: {e!s}",
+            )
+
+    async def _execute_with_claude(
+        self,
+        story: UserStory,
+        prompt: str,
+        step_name: str,
+        output_key: str,
+    ) -> bool | None:
+        """Execute a step using Claude engine.
+
+        Args:
+            story: The user story being processed
+            prompt: The prompt to execute
+            step_name: Name of the step (for logging and file naming)
+            output_key: Key to store output file path in step_outputs
+
+        Returns:
+            True if successful, False if failed, None if Claude unavailable
+        """
+        if not self.claude_engine:
+            return None
+
+        if not self.claude_engine.available:
+            self.memory.append_progress(
+                self._current_iteration,
+                story.id,
+                f"{step_name.upper()}:FALLBACK",
+                "Claude not available, using SkillRunner",
+            )
+            return None
+
+        self.memory.append_progress(
+            self._current_iteration,
+            story.id,
+            f"{step_name.upper()}:CLAUDE",
+            f"Using Claude Opus 4.5 ({self.config.claude_model})",
+        )
+
+        output_file = self._get_iteration_output_dir() / f"{step_name}_{story.id}.md"
+        result = await self.claude_engine.execute(
+            repo=self.repo,
+            prompt=prompt,
+            output_file=output_file,
+            variant=1,
+        )
+
+        if result.success and result.output_file:
+            story.step_outputs[output_key] = str(result.output_file)
+            return True
+
+        story.last_error = result.error or f"Claude {step_name} execution failed"
+        return False
+
+    async def _execute_with_runner(
+        self,
+        story: UserStory,
+        skill: str,
+        prompt: str,
+        output_key: str,
+        plan_file: str | None = None,
+    ) -> bool:
+        """Execute a step using SkillRunner.
+
+        Args:
+            story: The user story being processed
+            skill: Skill name to run
+            prompt: The prompt/task to execute
+            output_key: Key to store output file path in step_outputs
+            plan_file: Optional plan file to pass to runner
+
+        Returns:
+            True if successful, False if failed
+        """
+        meta = await self.runner.run(
+            skill=skill,
+            task=prompt,
+            variants=1,
+            plan_file=plan_file,
+        )
+
+        if meta.success_count > 0 and meta.results:
+            output_file = meta.results[0].output_file
+            if output_file:
+                story.step_outputs[output_key] = str(output_file)
+                return True
+
+        if meta.results:
+            story.last_error = meta.results[0].error or f"{skill.title()} execution failed"
+        else:
+            story.last_error = f"{skill.title()} execution failed"
+        return False
+
+    @staticmethod
+    def _has_blocking_issues(content: str) -> bool:
+        """Check if review content contains blocking issues."""
+        content_upper = content.upper()
+        return "BLOCKING" in content_upper or "CRITICAL" in content_upper
+
     async def _run_plan(self, story: UserStory) -> bool:
         """Run plan skill for architecture analysis.
 
         Uses ClaudeEngine directly if configured, otherwise falls back to SkillRunner.
         Optionally queries NotebookLM for architectural knowledge before planning.
         """
-        # Query knowledge before planning if enabled
-        if self.knowledge_engine and self.config.knowledge_query_before_plan:
-            context = QueryContext(
-                story_id=story.id,
-                story_type=story.type,
-                current_step=SkillStep.PLAN,
+        # Gather knowledge before planning if enabled
+        if self.config.knowledge_query_before_plan:
+            await self._gather_knowledge(
+                story=story,
+                step=SkillStep.PLAN,
+                queries=[
+                    f"What is the recommended architecture for: {story.title}",
+                    f"Are there existing patterns for: {story.description[:200]}",
+                ],
+                output_key="knowledge_context",
+                log_action="KNOWLEDGE:PLAN",
             )
-            try:
-                knowledge = await self.knowledge_engine.batch_query(
-                    [
-                        f"What is the recommended architecture for: {story.title}",
-                        f"Are there existing patterns for: {story.description[:200]}",
-                    ],
-                    context,
-                )
-                if knowledge:
-                    formatted = self.knowledge_engine.format_context(knowledge)
-                    if formatted:
-                        story.step_outputs["knowledge_context"] = formatted
-                        self.memory.append_progress(
-                            self._current_iteration,
-                            story.id,
-                            "KNOWLEDGE:PLAN",
-                            f"Retrieved {len(knowledge)} knowledge items for planning",
-                        )
-            except Exception as e:
-                # Graceful degradation - log but continue without knowledge
-                self.memory.append_progress(
-                    self._current_iteration,
-                    story.id,
-                    "KNOWLEDGE:WARN",
-                    f"Failed to fetch knowledge for plan: {e!s}",
-                )
 
         prompt = self._build_story_prompt(story, "plan")
 
-        # Use Claude directly if configured and available
-        if self.config.use_claude_for_plan and self.claude_engine:
-            if self.claude_engine.available:
-                self.memory.append_progress(
-                    self._current_iteration,
-                    story.id,
-                    "PLAN:CLAUDE",
-                    f"Using Claude Opus 4.5 for planning ({self.config.claude_model})",
-                )
-                output_dir = (
-                    self.repo
-                    / ".skillpack"
-                    / "ralph"
-                    / "iterations"
-                    / f"{self._current_iteration:03d}"
-                )
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_file = output_dir / f"plan_{story.id}.md"
-
-                result = await self.claude_engine.execute(
-                    repo=self.repo,
-                    prompt=prompt,
-                    output_file=output_file,
-                    variant=1,
-                )
-
-                if result.success and result.output_file:
-                    story.step_outputs["plan"] = str(result.output_file)
-                    return True
-                else:
-                    story.last_error = result.error or "Claude plan execution failed"
-                    return False
-            else:
-                self.memory.append_progress(
-                    self._current_iteration,
-                    story.id,
-                    "PLAN:FALLBACK",
-                    "Claude not available, using SkillRunner",
-                )
+        # Try Claude first if configured
+        if self.config.use_claude_for_plan:
+            result = await self._execute_with_claude(story, prompt, "plan", "plan")
+            if result is not None:
+                return result
 
         # Fallback to SkillRunner
-        meta = await self.runner.run(
-            skill="plan",
-            task=prompt,
-            variants=1,
-        )
-        if meta.success_count > 0 and meta.results:
-            output_file = meta.results[0].output_file
-            if output_file:
-                story.step_outputs["plan"] = str(output_file)
-                return True
-        if meta.results:
-            story.last_error = meta.results[0].error or "Plan execution failed"
-        else:
-            story.last_error = "Plan execution failed"
-        return False
+        return await self._execute_with_runner(story, "plan", prompt, "plan")
 
     async def _run_implement(self, story: UserStory) -> bool:
         """Run implement skill for code generation."""
         prompt = self._build_story_prompt(story, "implement")
-
-        # Pass previous step output if available
         plan_file = story.step_outputs.get("plan") or story.step_outputs.get("ui")
-
-        meta = await self.runner.run(
-            skill="implement",
-            task=prompt,
-            variants=1,
-            plan_file=plan_file,  # Pass previous step output as plan context
+        return await self._execute_with_runner(
+            story, "implement", prompt, "implement", plan_file=plan_file
         )
-        if meta.success_count > 0 and meta.results:
-            output_file = meta.results[0].output_file
-            if output_file:
-                story.step_outputs["implement"] = str(output_file)
-                return True
-        if meta.results:
-            story.last_error = meta.results[0].error or "Implement execution failed"
-        else:
-            story.last_error = "Implement execution failed"
-        return False
 
     async def _run_review(self, story: UserStory) -> bool:
         """Run review skill for code quality analysis.
@@ -314,102 +383,52 @@ class StoryOrchestrator:
         Uses ClaudeEngine directly if configured, otherwise falls back to SkillRunner.
         Optionally queries NotebookLM for coding standards before reviewing.
         """
-        # Query knowledge for review standards if enabled
-        if self.knowledge_engine and self.config.knowledge_query_before_review:
-            context = QueryContext(
-                story_id=story.id,
-                story_type=story.type,
-                current_step=SkillStep.REVIEW,
+        # Gather knowledge for review standards if enabled
+        if self.config.knowledge_query_before_review:
+            await self._gather_knowledge(
+                story=story,
+                step=SkillStep.REVIEW,
+                queries=[
+                    "What are the coding standards for this project?",
+                    "What security guidelines should be followed?",
+                ],
+                output_key="review_standards",
+                log_action="KNOWLEDGE:REVIEW",
             )
-            try:
-                knowledge = await self.knowledge_engine.batch_query(
-                    [
-                        "What are the coding standards for this project?",
-                        "What security guidelines should be followed?",
-                    ],
-                    context,
-                )
-                if knowledge:
-                    formatted = self.knowledge_engine.format_context(knowledge)
-                    if formatted:
-                        story.step_outputs["review_standards"] = formatted
-                        self.memory.append_progress(
-                            self._current_iteration,
-                            story.id,
-                            "KNOWLEDGE:REVIEW",
-                            f"Retrieved {len(knowledge)} knowledge items for review",
-                        )
-            except Exception:
-                # Graceful degradation - continue without knowledge
-                pass
 
         prompt = self._build_review_prompt(story)
 
-        # Use Claude directly if configured and available
-        if self.config.use_claude_for_review and self.claude_engine:
-            if self.claude_engine.available:
-                self.memory.append_progress(
-                    self._current_iteration,
-                    story.id,
-                    "REVIEW:CLAUDE",
-                    f"Using Claude Opus 4.5 for review ({self.config.claude_model})",
-                )
-                output_dir = (
-                    self.repo
-                    / ".skillpack"
-                    / "ralph"
-                    / "iterations"
-                    / f"{self._current_iteration:03d}"
-                )
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_file = output_dir / f"review_{story.id}.md"
-
-                result = await self.claude_engine.execute(
-                    repo=self.repo,
-                    prompt=prompt,
-                    output_file=output_file,
-                    variant=1,
-                )
-
-                if result.success and result.output_file:
-                    story.step_outputs["review"] = str(result.output_file)
-                    # Check for blocking issues in review output
-                    content = result.output_file.read_text(encoding="utf-8")
-                    if "BLOCKING" in content.upper() or "CRITICAL" in content.upper():
-                        story.last_error = "Review found blocking issues"
-                        return False
-                    return True
-                else:
-                    story.last_error = result.error or "Claude review execution failed"
+        # Try Claude first if configured
+        if self.config.use_claude_for_review:
+            result = await self._execute_with_claude(story, prompt, "review", "review")
+            if result is not None:
+                if result and self._check_review_blocking_issues(story):
                     return False
-            else:
-                self.memory.append_progress(
-                    self._current_iteration,
-                    story.id,
-                    "REVIEW:FALLBACK",
-                    "Claude not available, using SkillRunner",
-                )
+                return result
 
         # Fallback to SkillRunner
-        meta = await self.runner.run(
-            skill="review",
-            task=prompt,
-            variants=1,
-        )
-        if meta.success_count > 0 and meta.results:
-            output_file = meta.results[0].output_file
-            if output_file:
-                story.step_outputs["review"] = str(output_file)
-                # Check for blocking issues in review output
-                content = output_file.read_text(encoding="utf-8")
-                if "BLOCKING" in content.upper() or "CRITICAL" in content.upper():
-                    story.last_error = "Review found blocking issues"
-                    return False
+        success = await self._execute_with_runner(story, "review", prompt, "review")
+        if success and self._check_review_blocking_issues(story):
+            return False
+        return success
+
+    def _check_review_blocking_issues(self, story: UserStory) -> bool:
+        """Check review output for blocking issues.
+
+        Returns:
+            True if blocking issues found, False otherwise
+        """
+        review_path = story.step_outputs.get("review")
+        if not review_path:
+            return False
+
+        try:
+            content = Path(review_path).read_text(encoding="utf-8")
+            if self._has_blocking_issues(content):
+                story.last_error = "Review found blocking issues"
                 return True
-        if meta.results:
-            story.last_error = meta.results[0].error or "Review execution failed"
-        else:
-            story.last_error = "Review execution failed"
+        except OSError:
+            pass
         return False
 
     def _build_review_prompt(self, story: UserStory) -> str:
@@ -576,7 +595,7 @@ Please provide a thorough code review. Mark any blocking issues with "BLOCKING:"
                 "COMPLETE:MARKER",
                 "Wrote completion marker file",
             )
-        except Exception as exc:
+        except OSError as exc:
             self.memory.append_progress(
                 self._current_iteration,
                 "LOOP",

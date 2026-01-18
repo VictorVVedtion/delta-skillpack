@@ -178,7 +178,7 @@ class SkillRunner:
             )
             self._knowledge_engine = NotebookLMBridge(self.repo, memory, config)
             return self._knowledge_engine
-        except Exception as e:
+        except (ImportError, OSError, ValueError) as e:
             log.warning(f"Failed to initialize knowledge engine: {e}")
             return None
 
@@ -211,7 +211,7 @@ class SkillRunner:
                 log.info(f"[dim]Knowledge context retrieved ({len(responses)} queries)[/dim]")
             return knowledge_text
 
-        except Exception as e:
+        except (OSError, asyncio.TimeoutError, ValueError) as e:
             log.warning(f"Knowledge query failed (continuing without): {e}")
             return ""
 
@@ -468,7 +468,7 @@ def doctor(repo: Path) -> None:
         try:
             wf = load_workflow(wf_file.stem)
             console.print(f"  • [cyan]{wf.name}[/] ({wf.engine.value}, {wf.variants} variants)")
-        except Exception as e:
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             console.print(f"  • [red]{wf_file.stem}[/] (error: {e})")
 
 

@@ -211,7 +211,7 @@ class SelfHealingOrchestrator:
             )
             if response.confidence >= 0.7 and not response.error:
                 return response
-        except Exception:
+        except (OSError, asyncio.TimeoutError, ValueError):
             # Graceful degradation - return None on any error
             pass
 
@@ -231,5 +231,5 @@ class SelfHealingOrchestrator:
             )
             await asyncio.wait_for(proc.communicate(), timeout=120)
             return proc.returncode == 0
-        except Exception:
+        except (OSError, asyncio.TimeoutError):
             return False

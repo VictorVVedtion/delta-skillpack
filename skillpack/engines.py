@@ -72,8 +72,8 @@ class BaseEngine(ABC):
             proc.kill()
             await proc.wait()  # Ensure process is cleaned up
             return -1, "", f"Process timed out after {timeout}s"
-        except Exception as e:
-            return -1, "", str(e)
+        except OSError as e:
+            return -1, "", f"Process execution failed: {e}"
 
 
 class CodexEngine(BaseEngine):

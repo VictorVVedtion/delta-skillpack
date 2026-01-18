@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from rich.table import Table
 
 from .core import WORKFLOWS, SkillRunner, load_workflow, run_pipeline
 from .logging import get_console, init_logging
-from .models import SandboxMode
+from .models import RunMeta, SandboxMode
 
 console = get_console()
 
@@ -81,7 +82,7 @@ def cli(ctx, repo: str, output_json: bool, quiet: bool, log_level: str, log_file
 
 @cli.command("doctor")
 @click.pass_context
-def doctor_cmd(ctx):
+def doctor_cmd(ctx: click.Context) -> None:
     """Check environment and list available skills."""
     from .core import doctor as run_doctor
 
@@ -90,7 +91,7 @@ def doctor_cmd(ctx):
 
 @cli.command("list")
 @click.pass_context
-def list_skills(ctx):
+def list_skills(ctx: click.Context) -> None:
     """List available skills/workflows."""
     table = Table(title="Available Skills", box=box.ROUNDED)
     table.add_column("Skill", style="cyan")
@@ -102,14 +103,14 @@ def list_skills(ctx):
         try:
             wf = load_workflow(wf_file.stem)
             table.add_row(wf.name, wf.engine.value, str(wf.variants), wf.output.dir)
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError, ValueError):
             pass
 
     console.print(table)
 
 
 @cli.command("hello")
-def hello():
+def hello() -> None:
     """Print a friendly greeting."""
     click.echo("Hello from SkillPack!")
 
@@ -143,12 +144,12 @@ def add_common_options(f):
 
 
 def run_skill_command(
-    ctx,
+    ctx: click.Context,
     skill: str,
     task: str,
     plan_file: str | None = None,
     **kwargs,
-):
+) -> RunMeta | None:
     """Common skill execution logic."""
     repo = ctx.obj["repo"]
     dry_run = kwargs.pop("dry_run", False)
@@ -211,7 +212,7 @@ def run_skill_command(
 @click.argument("task", required=False, default="")
 @add_common_options
 @click.pass_context
-def plan(ctx, task: str, **kwargs):
+def plan(ctx: click.Context, task: str, **kwargs) -> None:
     """Generate implementation plans (read-only, parallel variants).
 
     \b
@@ -232,7 +233,7 @@ def plan(ctx, task: str, **kwargs):
 @click.option("--interactive", "-i", is_flag=True, help="Interactively select plan")
 @add_common_options
 @click.pass_context
-def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs):
+def implement(ctx: click.Context, task: str, plan_file: str | None, interactive: bool, **kwargs) -> None:
     """Implement a selected plan (workspace-write).
 
     \b
@@ -271,7 +272,7 @@ def implement(ctx, task: str, plan_file: str | None, interactive: bool, **kwargs
 @click.argument("task", required=False, default="")
 @add_common_options
 @click.pass_context
-def ui(ctx, task: str, **kwargs):
+def ui(ctx: click.Context, task: str, **kwargs) -> None:
     """Generate UI specification (Gemini, headless).
 
     \b
@@ -291,7 +292,7 @@ def ui(ctx, task: str, **kwargs):
 @click.option("--plan-file", "-f", help="Plan file input")
 @add_common_options
 @click.pass_context
-def run(ctx, skill_name: str, task: str, plan_file: str | None, **kwargs):
+def run(ctx: click.Context, skill_name: str, task: str, plan_file: str | None, **kwargs) -> None:
     """Run any workflow by name.
 
     \b
@@ -307,7 +308,7 @@ def run(ctx, skill_name: str, task: str, plan_file: str | None, **kwargs):
 @click.argument("task")
 @add_common_options
 @click.pass_context
-def pipeline(ctx, skills: tuple[str, ...], task: str, **kwargs):
+def pipeline(ctx: click.Context, skills: tuple[str, ...], task: str, **kwargs) -> None:
     """Run multiple skills in sequence.
 
     \b
@@ -342,7 +343,7 @@ def pipeline(ctx, skills: tuple[str, ...], task: str, **kwargs):
 @cli.command()
 @click.option("--limit", "-n", default=10, help="Number of runs to show")
 @click.pass_context
-def history(ctx, limit: int):
+def history(ctx: click.Context, limit: int) -> None:
     """Show recent skill runs."""
     repo = ctx.obj["repo"]
     runs_dir = repo / ".skillpack" / "runs"
@@ -376,7 +377,7 @@ def history(ctx, limit: int):
                     success,
                     duration,
                 )
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError):
                 table.add_row(run_dir.name, "?", "?", "?", "?")
 
     console.print(table)
@@ -385,13 +386,14 @@ def history(ctx, limit: int):
 @cli.command()
 @click.argument("run_id")
 @click.pass_context
-def show(ctx, run_id: str):
+def show(ctx: click.Context, run_id: str) -> None:
     """Show details of a specific run."""
     repo = ctx.obj["repo"]
     run_dir = repo / ".skillpack" / "runs" / run_id
 
     if not run_dir.exists():
-        console.print(f"[red]Run not found: {run_id}")
+        console.print(f"[red]Run not found: {run_id}[/]")
+        console.print("[dim]Tip: Use 'skill history' to see available runs[/dim]")
         return
 
     meta_file = run_dir / "meta.json"
@@ -414,7 +416,7 @@ def show(ctx, run_id: str):
 
 @cli.group()
 @click.pass_context
-def ralph(ctx):
+def ralph(ctx: click.Context) -> None:
     """Ralph - PRD-driven autonomous development.
 
     \b
@@ -430,7 +432,7 @@ def ralph(ctx):
 @click.argument("task")
 @click.option("--prd-file", "-f", help="Use existing PRD JSON file")
 @click.pass_context
-def ralph_init(ctx, task: str, prd_file: str | None):
+def ralph_init(ctx: click.Context, task: str, prd_file: str | None) -> None:
     """Initialize PRD from task description.
 
     \b
@@ -451,13 +453,19 @@ def ralph_init(ctx, task: str, prd_file: str | None):
         # Load existing PRD
         prd_path = Path(prd_file)
         if not prd_path.exists():
-            console.print(f"[red]PRD file not found: {prd_file}")
+            console.print(f"[red]PRD file not found: {prd_file}[/]")
+            console.print("[dim]Tip: Provide a valid JSON file path or omit -f to auto-generate[/dim]")
             return
         try:
             data = json.loads(prd_path.read_text())
             prd = PRD.model_validate(data)
-        except Exception as e:
-            console.print(f"[red]Failed to parse PRD: {e}")
+        except (json.JSONDecodeError, OSError) as e:
+            console.print(f"[red]Failed to parse PRD: {e}[/]")
+            console.print("[dim]Tip: Ensure the file contains valid JSON[/dim]")
+            return
+        except ValueError as e:
+            console.print(f"[red]Invalid PRD structure: {e}[/]")
+            console.print("[dim]Tip: PRD must contain 'id', 'title', and 'stories' fields[/dim]")
             return
     else:
         # Generate a simple PRD from task
@@ -492,7 +500,7 @@ def ralph_init(ctx, task: str, prd_file: str | None):
 @ralph.command("status")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def ralph_status(ctx, as_json: bool):
+def ralph_status(ctx: click.Context, as_json: bool) -> None:
     """Show current PRD execution status."""
     import json as json_module
 
@@ -548,7 +556,7 @@ def ralph_status(ctx, as_json: bool):
 @click.option("--max-iterations", "-n", default=100, help="Maximum iterations")
 @click.option("--dry-run", is_flag=True, help="Show what would run")
 @click.pass_context
-def ralph_start(ctx, max_iterations: int, dry_run: bool):
+def ralph_start(ctx: click.Context, max_iterations: int, dry_run: bool) -> None:
     """Start Ralph automation loop.
 
     \b
@@ -564,7 +572,8 @@ def ralph_start(ctx, max_iterations: int, dry_run: bool):
 
     prd = memory.load_prd()
     if prd is None:
-        console.print("[red]No PRD found. Run 'skill ralph init' first.")
+        console.print("[red]No PRD found.[/]")
+        console.print("[dim]Tip: Initialize with 'skill ralph init \"Your task description\"'[/dim]")
         return
 
     if dry_run:
@@ -600,7 +609,7 @@ def ralph_start(ctx, max_iterations: int, dry_run: bool):
 @ralph.command("next-story")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def ralph_next_story(ctx, as_json: bool):
+def ralph_next_story(ctx: click.Context, as_json: bool) -> None:
     """Get next story to execute (for scripts)."""
     import json as json_module
 
@@ -636,7 +645,7 @@ def ralph_next_story(ctx, as_json: bool):
 @click.option("--story-id", required=True, help="Story ID to check")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def ralph_story_status(ctx, story_id: str, as_json: bool):
+def ralph_story_status(ctx: click.Context, story_id: str, as_json: bool) -> None:
     """Get status of a specific story."""
     import json as json_module
 
@@ -676,7 +685,7 @@ def ralph_story_status(ctx, story_id: str, as_json: bool):
 @click.option("--story-id", required=True, help="Story ID to execute")
 @click.option("--steps", required=True, help="Comma-separated steps")
 @click.pass_context
-def ralph_execute_pipeline(ctx, story_id: str, steps: str):
+def ralph_execute_pipeline(ctx: click.Context, story_id: str, steps: str) -> None:
     """Execute skill pipeline for a story.
 
     \b
@@ -690,12 +699,14 @@ def ralph_execute_pipeline(ctx, story_id: str, steps: str):
 
     prd = memory.load_prd()
     if prd is None:
-        console.print("[red]No PRD found")
+        console.print("[red]No PRD found.[/]")
+        console.print("[dim]Tip: Initialize with 'skill ralph init \"Your task description\"'[/dim]")
         return
 
     story = next((s for s in prd.stories if s.id == story_id), None)
     if story is None:
-        console.print(f"[red]Story not found: {story_id}")
+        console.print(f"[red]Story not found: {story_id}[/]")
+        console.print("[dim]Tip: Use 'skill ralph status' to list available stories[/dim]")
         return
 
     console.print(f"[bold]Executing pipeline for {story_id}[/]")
@@ -710,13 +721,14 @@ def ralph_execute_pipeline(ctx, story_id: str, steps: str):
         console.print(f"[green]✓ {story_id} completed successfully[/]")
     else:
         console.print(f"[red]✗ {story_id} failed: {story.last_error}[/]")
+        console.print("[dim]Tip: Check logs in .skillpack/ralph/progress.txt for details[/dim]")
 
 
 @ralph.command("mark-failed")
 @click.option("--story-id", required=True, help="Story ID to mark")
 @click.option("--error", required=True, help="Error message")
 @click.pass_context
-def ralph_mark_failed(ctx, story_id: str, error: str):
+def ralph_mark_failed(ctx: click.Context, story_id: str, error: str) -> None:
     """Mark a story as failed (for scripts)."""
     from .ralph import MemoryManager
 
@@ -725,12 +737,14 @@ def ralph_mark_failed(ctx, story_id: str, error: str):
 
     prd = memory.load_prd()
     if prd is None:
-        console.print("[red]No PRD found")
+        console.print("[red]No PRD found.[/]")
+        console.print("[dim]Tip: Initialize with 'skill ralph init \"Your task description\"'[/dim]")
         return
 
     story = next((s for s in prd.stories if s.id == story_id), None)
     if story is None:
-        console.print(f"[red]Story not found: {story_id}")
+        console.print(f"[red]Story not found: {story_id}[/]")
+        console.print("[dim]Tip: Use 'skill ralph status' to list available stories[/dim]")
         return
 
     story.last_error = error
@@ -742,7 +756,7 @@ def ralph_mark_failed(ctx, story_id: str, error: str):
 
 @ralph.command("cancel")
 @click.pass_context
-def ralph_cancel(ctx):
+def ralph_cancel(ctx: click.Context) -> None:
     """Cancel current Ralph loop."""
     repo = ctx.obj["repo"]
     cancel_file = repo / ".skillpack" / "ralph" / ".cancel"
@@ -750,15 +764,22 @@ def ralph_cancel(ctx):
     console.print("[yellow]Cancel signal sent. Loop will stop after current iteration.")
 
 
-def main():
+def main() -> None:
     """Entry point."""
     try:
         cli(obj={})
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted")
         sys.exit(130)
-    except Exception as e:
-        console.print(f"[red]Error: {e}")
+    except click.ClickException:
+        raise  # Let Click handle its own exceptions
+    except (FileNotFoundError, PermissionError) as e:
+        console.print(f"[red]File error: {e}[/]")
+        console.print("[dim]Tip: Check file permissions and ensure paths are correct[/dim]")
+        sys.exit(1)
+    except (json.JSONDecodeError, ValueError) as e:
+        console.print(f"[red]Configuration error: {e}[/]")
+        console.print("[dim]Tip: Check workflow JSON files in ~/.claude/plugins/delta-skillpack/workflows/[/dim]")
         sys.exit(1)
 
 

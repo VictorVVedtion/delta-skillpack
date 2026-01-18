@@ -45,7 +45,7 @@ class MemoryManager:
         try:
             data = json.loads(prd_file.read_text(encoding="utf-8"))
             return PRD.model_validate(data)
-        except Exception:
+        except (json.JSONDecodeError, OSError, ValueError):
             return None
 
     def save_prd(self, prd: PRD) -> None:
@@ -74,7 +74,7 @@ class MemoryManager:
         try:
             data = json.loads(session_file.read_text(encoding="utf-8"))
             return RalphSession.model_validate(data)
-        except Exception:
+        except (json.JSONDecodeError, OSError, ValueError):
             return None
 
     def save_session(self, session: RalphSession) -> None:
@@ -149,7 +149,7 @@ class MemoryManager:
                 timeout=10,
             )
             return result.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return ""
 
     def get_git_diff(self, base: str = "HEAD~5") -> str:
@@ -163,7 +163,7 @@ class MemoryManager:
                 timeout=30,
             )
             return result.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return ""
 
     # =========================================================================
