@@ -3,19 +3,18 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "delta-skillpack"
-version = "1.0.0"
-description = "智能任务执行器 - 统一入口，自动路由，实时反馈"
+name = "openalpha"
+version = "2.0.0"
+description = "OpenAlpha - AI 辅助开发工具集"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     {name = "Delta Team"}
 ]
-keywords = ["cli", "task-automation", "ai-assistant"]
+keywords = ["ai-assistant", "claude-code", "skill"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -25,34 +24,20 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = [
-    "click>=8.0.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
-rich = [
-    "rich>=13.0.0",
-]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
 ]
-all = [
-    "delta-skillpack[rich,dev]",
-]
-
-[project.scripts]
-skill = "skillpack.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/VictorVVedtion/delta-skillpack"
-Documentation = "https://github.com/VictorVVedtion/delta-skillpack#readme"
-Repository = "https://github.com/VictorVVedtion/delta-skillpack.git"
-
-[tool.setuptools.packages.find]
-include = ["skillpack*"]
+Homepage = "https://github.com/VictorVVedtion/openalpha"
+Documentation = "https://github.com/VictorVVedtion/openalpha#readme"
+Repository = "https://github.com/VictorVVedtion/openalpha.git"
 
 [tool.ruff]
 target-version = "py39"
