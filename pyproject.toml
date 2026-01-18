@@ -47,9 +47,9 @@ all = [
 skill = "skillpack.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/delta-team/skillpack"
-Documentation = "https://github.com/delta-team/skillpack#readme"
-Repository = "https://github.com/delta-team/skillpack.git"
+Homepage = "https://github.com/VictorVVedtion/delta-skillpack"
+Documentation = "https://github.com/VictorVVedtion/delta-skillpack#readme"
+Repository = "https://github.com/VictorVVedtion/delta-skillpack.git"
 
 [tool.setuptools.packages.find]
 include = ["skillpack*"]
