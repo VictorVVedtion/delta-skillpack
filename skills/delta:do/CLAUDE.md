@@ -1,17 +1,33 @@
-# /do Skill - 执行指令 v4.0.0
+# /do Skill - 执行指令 v5.0.0
 
 当用户调用 `/do <任务>` 时，按以下流程执行：
+
+---
+
+## v5.0 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **原子检查点** | SHA-256 校验和 + write-rename 模式，数据不丢失 |
+| **结构化日志** | JSONL 格式执行日志，便于追踪和分析 |
+| **任务粒度控制** | 自动拆分大任务（< 5000 tokens），避免 MCP 超时 |
+| **智能降级策略** | 文档任务可快速降级，代码任务需确认 |
+| **指数退避重试** | MCP 失败时智能重试（1s → 2s → 4s），减少人工干预 |
+| **多版本备份** | 保留 3 个检查点备份，提高恢复成功率 |
+| **配置验证** | JSON Schema 验证 `.skillpackrc`，防止配置错误 |
 
 ---
 
 ## 核心原则
 
 1. **立即行动** - 不要只是解释，要真正执行任务
-2. **MCP 强制调用** - 指定阶段必须调用 MCP 工具，禁止 Claude 替代
-3. **量化决策** - 使用评分系统，决策有据可循
-4. **持续追踪** - 使用 TodoWrite 追踪进度
-5. **检查点保存** - 关键节点自动保存状态
-6. **错误恢复** - 遇到错误时提供恢复选项
+2. **量化决策** - 使用评分系统，决策有据可循
+3. **MCP 强制执行** - 指定模型必须通过 MCP 调用，禁止替代
+4. **循环执行** - RALPH/ARCHITECT 使用 Stop Hook 迭代直到完成
+5. **持续追踪** - 使用 TodoWrite 追踪进度
+6. **原子检查点** - SHA-256 校验 + 多版本备份，关键节点安全保存 (v5.0)
+7. **两阶段审查** - 规格合规 + 代码质量双保障
+8. **结构化日志** - JSONL 格式记录执行过程 (v5.0)
 
 ---
 
@@ -53,15 +69,16 @@
 
 ### 恢复流程
 
-1. 读取 `.skillpack/current/checkpoint.json`
-2. 验证检查点完整性
+1. 检查 `.claude/ralph-delta.local.md` 状态文件
+2. 如存在，读取并验证状态
 3. 输出恢复信息：
    ```
    ════════════════════════════════════════════════════════════
    🔄 从检查点恢复
    ════════════════════════════════════════════════════════════
    任务: {task_description}
-   恢复点: Phase {N}, {详细位置}
+   路由: {route}
+   恢复点: Phase {N}, 迭代 {iteration}
    已完成: {completed_percentage}%
    继续执行...
    ────────────────────────────────────────────────────────────
@@ -70,78 +87,12 @@
 
 ---
 
-## Step 3: 复杂度评分与路由
+## Step 3: 复杂度评分
 
 ### 强制模式覆盖
 
-- 如果 `quick_mode=true` → 使用 DIRECT_CODE 路由
+- 如果 `quick_mode=true` → 使用 DIRECT 路由
 - 如果 `deep_mode=true` → 使用 RALPH 路由
-
-### UI 任务检测 (优先级最高) → UI_FLOW
-
-匹配以下任一关键词（不区分大小写）：
-
-**基础 UI:**
-`ui`, `ux`, `界面`, `组件`, `component`, `页面`, `page`, `布局`, `layout`, `样式`, `style`, `css`, `tailwind`, `前端`, `frontend`, `按钮`, `button`, `表单`, `form`, `modal`, `弹窗`, `导航`, `nav`, `menu`, `菜单`
-
-**框架特定:**
-`jsx`, `tsx`, `hook`, `useState`, `useEffect`, `useContext`, `useMemo`, `useCallback`, `context`, `provider`, `consumer`, `portal`, `vue`, `template`, `slot`, `v-model`, `v-bind`, `v-if`, `computed`, `ref`, `reactive`, `next`, `nuxt`, `svelte`, `astro`, `remix`, `gatsby`
-
-**样式系统:**
-`styled-components`, `emotion`, `css-in-js`, `css modules`, `module.css`, `shadcn`, `radix`, `chakra`, `material-ui`, `mui`, `antd`, `ant-design`, `sass`, `scss`, `less`, `postcss`, `windicss`, `unocss`
-
-**交互与动画:**
-`animation`, `transition`, `framer`, `framer-motion`, `motion`, `gsap`, `animate`, `gesture`, `drag`, `drop`, `swipe`, `fade`, `slide`, `zoom`, `scale`, `rotate`, `hover`, `focus`, `active`, `disabled`, `loading`, `skeleton`
-
-**响应式:**
-`responsive`, `breakpoint`, `media query`, `mobile`, `tablet`, `desktop`, `flex`, `flexbox`, `grid`, `container`, `wrapper`, `col`, `row`
-
-**可访问性:**
-`a11y`, `aria`, `accessibility`, `screen reader`, `keyboard navigation`, `focus trap`, `skip link`, `alt text`
-
-**视觉元素:**
-`icon`, `svg`, `avatar`, `badge`, `chip`, `tag`, `tooltip`, `popover`, `typography`, `font`, `heading`, `text`, `label`, `placeholder`, `color`, `theme`, `dark mode`, `light mode`, `palette`
-
-**表单元素:**
-`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`, `toggle`, `datepicker`, `timepicker`, `slider`, `range`, `upload`, `dropzone`
-
-**布局组件:**
-`card`, `list`, `table`, `tabs`, `accordion`, `collapse`, `drawer`, `sidebar`, `header`, `footer`, `navbar`, `breadcrumb`, `pagination`, `stepper`
-
-**反馈组件:**
-`toast`, `notification`, `alert`, `dialog`, `confirm`, `progress`, `spinner`
-
-### 文本简单任务 → DIRECT_TEXT
-
-匹配以下任一条件:
-- 关键词: `typo`, `拼写`, `readme`, `文档`, `docs`, `comment`, `注释`, `config`, `配置`, `changelog`, `license`
-- 文件类型: `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`, `.ini`, `.env.example`
-- 描述少于 8 个词且不涉及代码逻辑
-
-### 代码简单任务 → DIRECT_CODE
-
-匹配以下任一条件:
-- 关键词: `fix`, `bug`, `function`, `method`, `add`, `remove`, `implement`, `修复`, `实现`, `添加`, `删除`
-- 文件类型: `.ts`, `.js`, `.py`, `.go`, `.rs`, `.java`, `.tsx`, `.jsx`, `.vue`, `.svelte`
-- 不匹配 DIRECT_TEXT 信号的简单任务（< 10 词）
-
-### 超复杂任务 → ARCHITECT
-
-匹配以下任一条件:
-- 关键词: `architecture`, `架构`, `设计系统`, `microservice`, `微服务`, `design system`, `系统设计`
-- 包含: `从零`, `from scratch`, `全新`, `brand new` + 大型项目关键词
-- 描述超过 50 个词且涉及多系统/模块
-
-### 复杂任务 → RALPH
-
-匹配以下任一条件:
-- 关键词: `system`, `系统`, `完整`, `complete`, `comprehensive`, `多模块`, `multi-module`, `重构`, `refactor`
-- 包含: `fork`, `clone`, `构建`, `build` + 项目名
-- 描述超过 30 个词
-
-### 中等任务 → PLANNED
-
-不匹配以上任何类别的任务
 
 ### 6 维度评分（参考 modules/scoring.md）
 
@@ -154,15 +105,26 @@
 | 时间估算 | 10% | 预估完成时间 |
 | UI 复杂度 | 10% | 界面/交互复杂度 |
 
-### 路由决策
+### 快速信号调整
 
-| 总分 | 路由 | 阶段数 |
-|------|------|--------|
-| 0-20 | DIRECT | 1 |
-| 21-45 | PLANNED | 3 |
-| 46-70 | RALPH | 4 |
-| 71-100 | ARCHITECT | 5 |
-| UI 信号 | UI_FLOW | 3 |
+| 关键词 | 调整 |
+|--------|------|
+| `typo`, `拼写`, `注释` | -10 分 |
+| `重构`, `refactor` | +15 分 |
+| `系统`, `架构` | +20 分 |
+| `完整`, `从零` | +25 分 |
+
+---
+
+## Step 4: 路由决策
+
+| 总分 | 路由 | 执行模式 |
+|------|------|----------|
+| 0-20 | DIRECT | 线性 |
+| 21-45 | PLANNED | 线性 |
+| 46-70 | RALPH | **循环** |
+| 71-100 | ARCHITECT | **循环** |
+| UI 信号 | UI_FLOW | 线性 |
 
 ### --explain 模式输出
 
@@ -181,7 +143,7 @@
 │ UI 复杂度:   {条形图} {ui}/10          │
 └────────────────────────────────────────┘
 
-🚀 推荐路由: {路由名称}
+🚀 推荐路由: {路由名称} ({线性/循环})
 📝 路由原因: {原因说明}
 ────────────────────────────────────────────────────────────
 ```
@@ -190,180 +152,258 @@
 
 ---
 
-## MCP 强制调用规则
+## Step 5: 准备执行环境
 
-### 核心约束（必须遵守）
+1. 确保 `.skillpack/current/` 目录存在
+2. 清空目录中的旧文件
+3. 初始化检查点
 
-1. **⛔ 禁止替代** - mandatory 阶段禁止 Claude 自己执行代码任务
-2. **❌ 禁止静默降级** - MCP 调用失败必须询问用户，不得自动降级
-3. **✅ 验证输出** - 每阶段完成后标注实际使用的模型
+### 循环模式额外步骤 (RALPH/ARCHITECT)
 
-### 强制使用 Codex 的阶段
+4. 创建状态文件 `.claude/ralph-delta.local.md`：
 
-| 路由 | 阶段 | MCP 工具 |
-|------|------|----------|
-| DIRECT_CODE | Phase 1 | `mcp__codex-cli__codex` |
-| PLANNED | Phase 2-3 | `mcp__codex-cli__codex` |
-| RALPH | Phase 2-4 | `mcp__codex-cli__codex` |
-| ARCHITECT | Phase 3-5 | `mcp__codex-cli__codex` |
+```markdown
+# Delta Loop State
 
-### 强制使用 Gemini 的阶段
+## Meta
+- Task ID: {uuid}
+- Route: {RALPH/ARCHITECT}
+- Started: {timestamp}
+- Last Updated: {timestamp}
 
-| 路由 | 阶段 | MCP 工具 |
-|------|------|----------|
-| UI_FLOW | Phase 1-2 | `mcp__gemini-cli__ask-gemini` |
-| ARCHITECT | Phase 1 | `mcp__gemini-cli__ask-gemini` |
+## Iteration
+- Current: 1
+- Max Allowed: 20
+- Status: IN_PROGRESS
 
-### MCP 调用示例
+## Progress
+- Current Phase: 1
+- Completed Phases: []
+- Current Subtask: 0 / {total}
 
-**调用 Codex:**
+## Pending Work
+{初始任务描述}
+
+## Completed Work
+(none)
+
+## Promise
+<!-- 任务完成后在此处设置完成标记 -->
 ```
-mcp__codex-cli__codex({
-  prompt: "任务描述 + 相关文件内容",
-  cwd: "/path/to/project"
-})
-```
-
-**调用 Gemini:**
-```
-mcp__gemini-cli__ask-gemini({
-  prompt: "任务描述 + 相关文件内容"
-})
-```
-
-### MCP 调用失败处理
-
-当 MCP 工具调用失败时，**必须询问用户**：
-
-```
-════════════════════════════════════════════════════════════
-⚠️ MCP 调用失败
-════════════════════════════════════════════════════════════
-工具: {mcp__codex-cli__codex | mcp__gemini-cli__ask-gemini}
-错误: {错误信息}
-────────────────────────────────────────────────────────────
-📋 选项:
-  [1] 重试 - 重新调用 MCP 工具
-  [2] 降级 - 使用 Claude 执行（需确认）
-  [3] 中止 - 终止当前任务
-────────────────────────────────────────────────────────────
-```
-
-**禁止**：自动降级到 Claude 执行
 
 ---
 
 ## 执行策略
 
-### 文本任务 (DIRECT_TEXT) - Claude
+### DIRECT（直接执行）- 线性
+
+**适用**: 0-20 分，简单任务
 
 ```
-1. 直接使用 Claude Code 工具执行
-2. 输出简短完成摘要
-3. 标注: 执行模型: Claude (DIRECT_TEXT)
+Phase 1 (100%): 执行
+  └── Claude 直接完成任务
 ```
 
-### 代码任务 (DIRECT_CODE) - Codex (MCP)
+**行为**:
+1. 使用 TodoWrite 创建简单任务列表
+2. 直接使用工具完成任务
+3. 保存输出到 `.skillpack/current/output.txt`
+
+---
+
+### PLANNED（计划执行）- 线性
+
+**适用**: 21-45 分，中等复杂度任务
 
 ```
-1. Claude 收集相关文件内容
-2. **调用 mcp__codex-cli__codex** 执行代码任务
-3. 验证 Codex 输出并应用变更
-4. 输出完成摘要
-5. 标注: 执行模型: Codex via mcp__codex-cli__codex (DIRECT_CODE)
+Phase 1 (30%): 规划        ← Claude
+Phase 2 (60%): 实现        ← Codex (MCP)
+Phase 3 (100%): 两阶段审查 ← Codex (MCP)
 ```
 
-### 中等任务 (PLANNED) - Claude + Codex
+#### Phase 2/3: MCP 强制调用
+
+**进入 Phase 2 时必须**：
+
+1. 输出阶段提示，明确标注 `🤖 执行模型: Codex (MCP 强制调用)`
+2. 准备调用参数
+3. **立即调用** `mcp__codex-cli__codex`
+4. **禁止** Claude 自己使用 Write/Edit 工具完成实现
+
+---
+
+### RALPH（复杂任务自动化）- 循环
+
+**适用**: 46-70 分，复杂任务
 
 ```
-Phase 1 (30%): 规划阶段 - Claude
-  - 分析需求
-  - 列出实施步骤（3-7步）
-  - 创建 TodoWrite 列表
-  - 标注: 执行模型: Claude (规划)
-
-Phase 2 (60%): 实现阶段 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 执行实现
-  - 验证并应用变更
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (实现)
-
-Phase 3 (100%): 审查阶段 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 审查代码
-  - 输出完成摘要
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (审查)
+Phase 1 (20%): 深度分析    ← Claude
+Phase 2 (40%): 规划        ← Claude
+Phase 3 (75%): 执行子任务  ← Codex (MCP) [循环迭代]
+Phase 4 (100%): 综合审查   ← Codex (MCP)
 ```
 
-### 复杂任务 (RALPH) - Claude + Codex
+#### 循环执行机制
+
+1. **状态文件**：创建 `.claude/ralph-delta.local.md`
+2. **迭代执行**：每次迭代更新状态文件
+3. **Stop Hook**：未完成时拦截退出，重新注入 Prompt
+4. **完成标记**：完成后设置 `<promise>TASK_COMPLETE</promise>`
+
+#### Phase 3: 子任务循环
+
+每个子任务完成后：
+1. 更新状态文件中的 `Current Subtask`
+2. 更新 `Completed Work`
+3. 检查是否全部完成
+
+**全部子任务完成后**，进入 Phase 4。
+
+#### Phase 3/4: MCP 强制调用
 
 ```
-Phase 1 (20%): 分析阶段 - Claude
-  - 将大任务拆分为子任务
-  - 识别依赖关系
-  - 标注: 执行模型: Claude (分析)
+🚨 RALPH Phase 3/4 强制执行流程：
 
-Phase 2 (40%): 规划阶段 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 生成实施步骤
-  - 创建详细 TodoWrite 列表
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (规划)
+1. 输出阶段提示，明确标注 `🤖 执行模型: Codex (MCP 强制调用)`
+2. 准备调用参数：
+   - prompt: 包含详细任务描述、相关文件路径、期望输出
+3. 立即调用 mcp__codex-cli__codex
+4. 等待 Codex 返回结果
+5. 更新状态文件
+6. 验证并保存输出
 
-Phase 3 (75%): 执行阶段 - Codex (MCP)
-  - 按依赖顺序执行子任务
-  - 每个子任务 **调用 mcp__codex-cli__codex**
-  - 必要时使用 Task agent 并行处理
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (执行)
-
-Phase 4 (100%): 审查阶段 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 综合审查
-  - 输出完成报告
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (审查)
+禁止行为：
+❌ Claude 自己使用 Write/Edit 工具写代码
+❌ 跳过 MCP 调用直接完成任务
+❌ MCP 失败后不询问用户就自己接管
 ```
 
-### 超复杂任务 (ARCHITECT) - Gemini + Claude + Codex
+---
+
+### ARCHITECT（架构优先）- 循环
+
+**适用**: 71-100 分，超复杂任务
 
 ```
-Phase 1 (15%): 架构分析 - Gemini (MCP)
-  - **调用 mcp__gemini-cli__ask-gemini** 分析架构
-  - 输出架构建议
-  - 标注: 执行模型: Gemini via mcp__gemini-cli__ask-gemini (架构分析)
-
-Phase 2 (30%): 架构设计 - Claude
-  - 基于 Gemini 分析完善设计
-  - 输出模块设计和实施路线图
-  - 标注: 执行模型: Claude (架构设计)
-
-Phase 3 (50%): 实施规划 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 生成实施计划
-  - 输出详细文件结构和代码框架
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (实施规划)
-
-Phase 4 (80%): 分阶段实施 - Codex (MCP)
-  - 按计划逐阶段 **调用 mcp__codex-cli__codex** 执行
-  - 每阶段完成后保存输出
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (分阶段实施)
-
-Phase 5 (100%): 验收审查 - Codex (MCP)
-  - **调用 mcp__codex-cli__codex** 验收审查
-  - 对照架构设计检查实现
-  - 标注: 执行模型: Codex via mcp__codex-cli__codex (验收审查)
+Phase 1 (15%): 架构分析    ← Gemini (MCP)
+Phase 2 (30%): 架构设计    ← Claude
+Phase 3 (50%): 实施规划    ← Claude
+Phase 4 (80%): 分阶段实施  ← Codex (MCP) [循环迭代]
+Phase 5 (100%): 验收审查   ← Codex (MCP)
 ```
 
-### UI 任务 (UI_FLOW) - Gemini
+#### Phase 1: Gemini 架构分析
 
 ```
-Phase 1 (30%): UI 设计 - Gemini (MCP)
-  - **调用 mcp__gemini-cli__ask-gemini** 分析 UI 需求
-  - 输出组件结构和设计规范
-  - 标注: 执行模型: Gemini via mcp__gemini-cli__ask-gemini (UI设计)
+🚨 ARCHITECT Phase 1 强制执行流程：
 
-Phase 2 (60%): 实现 - Gemini (MCP)
-  - **调用 mcp__gemini-cli__ask-gemini** 生成组件代码
-  - 验证并应用变更
-  - 标注: 执行模型: Gemini via mcp__gemini-cli__ask-gemini (实现)
+1. 输出阶段提示，明确标注 `🤖 执行模型: Gemini (MCP 强制调用)`
+2. 准备调用参数：
+   - prompt: @{project_path} 分析整个项目架构...
+3. 立即调用 mcp__gemini-cli__ask-gemini
+4. 等待 Gemini 返回结果
+5. 保存到 1_architecture_analysis.md
 
-Phase 3 (100%): 预览 - Claude
-  - 使用 mcp__claude-in-chrome__* 工具预览（如可用）
-  - 截图展示结果
-  - 标注: 执行模型: Claude (预览)
+禁止行为：
+❌ Claude 自己进行架构分析
+❌ 跳过 Gemini 调用
+```
+
+#### Phase 4/5: Codex 实施
+
+同 RALPH 的 MCP 强制调用流程。
+
+---
+
+### UI_FLOW（UI 流程）- 线性
+
+**适用**: UI 信号，前端任务
+
+```
+Phase 1 (30%): UI设计   ← Gemini (MCP)
+Phase 2 (60%): 实现     ← Gemini (MCP)
+Phase 3 (100%): 预览    ← Claude
+```
+
+#### Phase 1/2: Gemini UI 开发
+
+```
+🚨 UI_FLOW Phase 1/2 强制执行流程：
+
+1. 输出阶段提示，明确标注 `🤖 执行模型: Gemini (MCP 强制调用)`
+2. 准备调用参数：
+   - prompt: @{components_path} 设计/实现 UI...
+3. 立即调用 mcp__gemini-cli__ask-gemini
+4. 等待 Gemini 返回结果
+5. 保存输出
+
+禁止行为：
+❌ Claude 自己实现 UI 代码
+❌ 跳过 Gemini 调用
+```
+
+---
+
+## MCP 调用模板
+
+### Codex 开发调用
+
+```python
+prompt = f"""
+任务: {task_description}
+
+相关文件:
+{list_of_files}
+
+要求:
+{requirements}
+
+输出格式:
+- 创建/修改的文件列表
+- 每个文件的完整代码
+"""
+
+mcp__codex-cli__codex(
+    prompt=prompt,
+    sandbox="workspace-write"
+)
+```
+
+### Gemini 架构分析
+
+```python
+prompt = f"""
+@{project_root_path}
+
+分析整个项目架构:
+1. 模块依赖关系
+2. 技术栈识别
+3. 架构模式识别
+4. 改进建议
+"""
+
+mcp__gemini-cli__ask-gemini(
+    prompt=prompt
+)
+```
+
+### Gemini UI 开发
+
+```python
+prompt = f"""
+@{components_path}
+
+任务: {ui_task}
+
+设计要求:
+{design_requirements}
+
+技术栈: {tech_stack}
+"""
+
+mcp__gemini-cli__ask-gemini(
+    prompt=prompt
+)
 ```
 
 ---
@@ -375,7 +415,7 @@ Phase 3 (100%): 预览 - Claude
 ```
 ════════════════════════════════════════════════════════════
 📍 Phase {N}/{TOTAL}: {阶段名称} | {路由} 路由
-🤖 执行模型: {Claude/Codex/Gemini}
+🤖 执行模型: {Claude/Codex/Gemini} {(MCP 强制调用) 或 (直接执行)}
 ════════════════════════════════════════════════════════════
 进度: {进度条} {百分比}%
 
@@ -397,32 +437,199 @@ Phase 3 (100%): 预览 - Claude
 
 ---
 
-## 检查点保存（参考 modules/checkpoint.md）
+## MCP 失败处理
 
-### 自动保存时机
+### 指数退避重试 (v5.0)
 
-- 每个阶段完成时
-- 每个子任务完成时
-- 发生可恢复错误时
+MCP 调用失败时，先自动重试：
 
-### 保存内容
+```yaml
+retry_policy:
+  max_attempts: 3
+  backoff:
+    initial_delay_ms: 1000    # 首次重试延迟 1 秒
+    multiplier: 2             # 每次延迟翻倍
+    max_delay_ms: 30000       # 最大延迟 30 秒
+    jitter: true              # 添加随机抖动
+```
 
-```json
-{
-  "task_id": "uuid",
-  "route": "RALPH",
-  "complexity_score": 58,
-  "current_phase": 3,
-  "completed_phases": [1, 2],
-  "subtasks": {...},
-  "files_modified": [...],
-  "timestamp": "..."
-}
+**重试序列**: 立即 → 1s → 2s → 4s → 询问用户
+
+### 错误分类
+
+| 级别 | 错误类型 | 处理策略 |
+|------|----------|----------|
+| L1 | 网络超时、速率限制、服务暂不可用 | 自动指数退避重试 |
+| L2 | 认证过期、配额超限、模型过载 | 询问用户确认 |
+| L3 | 请求无效、内容过滤、未知错误 | 报告错误，用户决策 |
+
+### 智能降级策略 (v5.0)
+
+根据任务类型决定降级行为：
+
+| 任务类型 | 降级策略 | 说明 |
+|----------|----------|------|
+| 文档更新 | `auto` | 可自动降级到 Claude |
+| 配置修改 | `auto` | 可自动降级到 Claude |
+| 代码实现 | `require_confirmation` | 必须用户确认 |
+| 架构设计 | `require_confirmation` | 必须用户确认 |
+| UI 开发 | `require_confirmation` | 必须用户确认 |
+
+### 用户选择界面
+
+自动重试失败后，显示选项：
+
+```
+╔════════════════════════════════════════════════════════════╗
+║ ⚠️ MCP 调用失败                                            ║
+╠════════════════════════════════════════════════════════════╣
+║ 模型: {Codex/Gemini}                                       ║
+║ 工具: {tool_name}                                          ║
+║ 错误: {error_message}                                      ║
+║ 重试: {retry_count}/3 (已用尽)                             ║
+╠════════════════════════════════════════════════════════════╣
+║ 📋 恢复选项:                                               ║
+║   [1] 🔄 重试 - 再次尝试 MCP 调用                          ║
+║   [2] 🔀 Claude 接管 - 允许 Claude 完成此阶段              ║
+║   [3] ⏭️ 跳过 - 跳过此阶段                                 ║
+║   [4] ⛔ 中止 - 终止执行                                   ║
+╚════════════════════════════════════════════════════════════╝
+请选择 (1-4):
+```
+
+**重要**：代码任务必须获得用户选择后才能继续，**禁止静默降级**。
+
+---
+
+## 状态文件更新规范
+
+### 每阶段完成后
+
+更新 `.claude/ralph-delta.local.md`：
+
+1. 添加阶段到 `Completed Phases`
+2. 更新 `Current Phase`
+3. 更新 `Completed Work` 摘要
+4. 更新 `Pending Work`
+5. 更新 `Last Updated`
+
+### 每子任务完成后
+
+1. 更新 `Current Subtask`
+2. 添加到 `Completed Work`
+
+### 全部完成时
+
+**必须设置完成标记**：
+
+```markdown
+## Promise
+<promise>TASK_COMPLETE</promise>
+
+## Completion Summary
+- Total Iterations: {count}
+- Total Duration: {time}
+- Files Modified: {count}
+- Review Score: {score}/100
 ```
 
 ---
 
-## 两阶段审查（参考 modules/review.md）
+## 阶段完成输出
+
+**成功：**
+```
+✅ Phase {N} 完成
+├── 执行模型: {实际使用的模型}
+├── MCP 工具: {tool_name 或 N/A}
+├── 耗时: {duration}
+└── 输出: {output_file}
+```
+
+**降级执行：**
+```
+⚠️ Phase {N} 完成 (降级执行)
+├── 原计划模型: {planned_model}
+├── 实际模型: Claude (用户授权降级)
+├── 降级原因: {reason}
+└── 输出: {output_file}
+```
+
+---
+
+## 任务完成输出
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 任务完成
+
+📋 任务: {task_description}
+📊 复杂度: {score}/100 ({路由})
+🔄 迭代次数: {iterations} (仅循环模式)
+🚀 执行路径: {阶段描述}
+
+📁 变更文件:
+  - path/to/file1.ts (新增)
+  - path/to/file2.ts (修改)
+
+📝 摘要:
+  {2-3句话总结}
+
+📄 输出文件:
+  - .skillpack/current/1_*.md
+  - .skillpack/current/2_*.md
+  - ...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## 错误处理
+
+### 自动恢复
+
+| 错误类型 | 策略 |
+|----------|------|
+| 网络超时 | 等待 5 秒重试，最多 3 次 |
+| 语法错误 | 自动尝试修复，最多 2 次 |
+| 文件锁定 | 等待 2 秒重试，最多 5 次 |
+| MCP 失败 | 询问用户选择恢复选项 |
+
+### 恢复选项菜单
+
+```
+════════════════════════════════════════════════════════════
+⚠️ 执行错误
+════════════════════════════════════════════════════════════
+阶段: Phase {N} - {阶段名称}
+错误类型: {错误分类}
+错误消息: {错误信息}
+────────────────────────────────────────────────────────────
+
+📋 恢复选项:
+  [1] 🔄 继续 - 从失败点继续执行
+  [2] 🔁 重试 - 重新执行当前步骤
+  [3] ⏪ 回滚 - 撤销本次所有变更
+  [4] ⏭️ 跳过 - 跳过当前阶段
+  [5] ⛔ 中止 - 终止执行
+
+请选择 (1-5):
+```
+
+---
+
+## 进度追踪
+
+**必须使用 TodoWrite 工具追踪任务进度**：
+
+1. 开始执行前，创建任务列表
+2. 每个阶段开始时，更新为 `in_progress`
+3. 每个阶段完成时，标记为 `completed`
+4. 同时只有一个任务处于 `in_progress` 状态
+
+---
+
+## 两阶段审查
 
 ### 阶段 A: 规格审查
 
@@ -461,187 +668,116 @@ Phase 3 (100%): 预览 - Claude
 
 ---
 
-## 错误处理（参考 modules/recovery.md）
+## 原子检查点机制 (v5.0)
 
-### 自动恢复（MCP 失败除外）
-
-| 错误类型 | 策略 |
-|----------|------|
-| 网络超时 | 等待 5 秒重试，最多 3 次 |
-| 语法错误 | 自动尝试修复，最多 2 次 |
-| 文件锁定 | 等待 2 秒重试，最多 5 次 |
-
-**注意**: MCP 调用失败**不适用**自动恢复，**必须询问用户**
-
-### 恢复选项菜单
+### 写入流程
 
 ```
-════════════════════════════════════════════════════════════
-⚠️ 执行错误
-════════════════════════════════════════════════════════════
-阶段: Phase {N} - {阶段名称}
-执行模型: {模型名称}
-错误类型: {错误分类}
-错误消息: {错误信息}
-────────────────────────────────────────────────────────────
+保存检查点
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Step 1: 生成临时文件                         │
+│   文件名: checkpoint.json.tmp.{random_id}   │
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Step 2: 写入完整数据 + 计算 SHA-256          │
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Step 3: 原子重命名 (mv tmp → checkpoint.json)│
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Step 4: 更新校验和文件 (.sha256)             │
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Step 5: 轮转备份 (保留 3 个版本)             │
+└─────────────────────────────────────────────┘
+```
 
-📋 恢复选项:
-  [1] 🔄 继续 - 从失败点继续执行
-  [2] 🔁 重试 - 重新执行当前步骤
-  [3] ⏪ 回滚 - 撤销本次所有变更
-  [4] ⏭️ 跳过 - 跳过当前阶段
-  [5] ⛔ 中止 - 终止执行
+### 校验失败恢复
 
-请选择 (1-5):
+1. 尝试 `.backup.1` → `.backup.2` → `.backup.3`
+2. 所有备份无效时提供选项：
+   - 从历史记录恢复
+   - 放弃检查点，重新开始
+   - 手动检查文件
+
+---
+
+## 结构化日志 (v5.0)
+
+### 日志位置
+
+`.skillpack/current/execution.log.jsonl`
+
+### 日志格式
+
+```json
+{"ts":"2026-01-19T10:00:00Z","level":"INFO","phase":1,"model":"gemini","event":"phase_start","msg":"开始架构分析"}
+{"ts":"2026-01-19T10:05:00Z","level":"INFO","phase":1,"model":"gemini","event":"mcp_call","msg":"调用 ask-gemini","metrics":{"tokens":1500}}
+{"ts":"2026-01-19T10:15:00Z","level":"INFO","phase":1,"model":"gemini","event":"phase_complete","msg":"架构分析完成","metrics":{"duration_ms":900000}}
+```
+
+### 事件类型
+
+| 事件 | 说明 |
+|------|------|
+| `phase_start` | 阶段开始 |
+| `phase_complete` | 阶段完成 |
+| `mcp_call` | MCP 工具调用 |
+| `mcp_retry` | MCP 重试 |
+| `mcp_fallback` | MCP 降级 |
+| `checkpoint_write` | 检查点保存 |
+| `error` | 错误发生 |
+
+---
+
+## 任务粒度控制 (v5.0)
+
+### MCP 调用限制
+
+| 限制项 | 阈值 | 处理策略 |
+|--------|------|----------|
+| Prompt 长度 | < 5000 tokens | 自动拆分 |
+| 文件数量 | < 10 个 | 分批处理 |
+| 代码行数 | < 500 行/次 | 按模块拆分 |
+| 复杂度评分 | < 40/子任务 | 进一步拆分 |
+
+### 自动拆分策略
+
+大任务自动拆分为多个 MCP 调用：
+
+```
+原始任务: "实现用户认证系统"
+    │
+    ▼
+拆分后:
+├── MCP Call 1: 创建用户模型和数据库 Schema
+├── MCP Call 2: 实现注册接口
+├── MCP Call 3: 实现登录接口
+├── MCP Call 4: 实现 JWT 验证中间件
+└── MCP Call 5: 添加单元测试
 ```
 
 ---
 
-## 任务完成输出
+## 模块引用
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ 任务完成
-
-📋 任务: {task_description}
-📊 复杂度: {score}/100 ({路由})
-🤖 执行模型: {实际使用的模型列表}
-🚀 执行路径: {阶段描述}
-
-📁 变更文件:
-  - path/to/file1.ts (新增)
-  - path/to/file2.ts (修改)
-
-📝 摘要:
-  {2-3句话总结}
-
-📄 输出文件:
-  - .skillpack/current/1_*.md
-  - .skillpack/current/2_*.md
-  - ...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
----
-
-## 输出管理
-
-```
-.skillpack/
-├── current/
-│   ├── checkpoint.json       # 检查点
-│   ├── 1_*.md               # 阶段输出
-│   └── error.log            # 错误日志
-└── history/<timestamp>/      # 历史记录
-```
-
-| 路由 | 输出文件 |
-|------|----------|
-| DIRECT_TEXT | `output.txt` |
-| DIRECT_CODE | `output.txt` |
-| PLANNED | `1_plan.md`, `2_implementation.md`, `3_review.md` |
-| RALPH | `1_analysis.md`, `2_plan.md`, `3_subtask_*.md`, `4_review.md` |
-| ARCHITECT | `1_architecture_analysis.md`, `2_architecture_design.md`, `3_implementation_plan.md`, `4_phase_*.md`, `5_acceptance_review.md` |
-| UI_FLOW | `1_ui_design.md`, `2_implementation.md`, `3_preview.md` |
-
----
-
-## 知识库集成
-
-如果项目根目录存在 `.skillpackrc` 文件:
-1. 读取配置获取 `knowledge.default_notebook`
-2. 使用 `mcp__notebooklm-mcp__notebook_query` 查询相关文档
-3. 将知识注入执行上下文
-
----
-
-## AI 模型分工
-
-### ⚠️ 铁律：MCP 调用强制约束
-
-**以下规则不可违反，必须严格执行：**
-
-1. **禁止替代规则**：当路由-模型分配矩阵指定使用 Codex 或 Gemini 时，**禁止 Claude 自己执行该阶段的核心任务**。必须调用对应的 MCP 工具。
-
-2. **阶段检查点**：进入需要调用 MCP 的阶段时，必须：
-   - 先输出"🤖 调用: {模型名称}"提示
-   - 然后**立即调用** MCP 工具
-   - **不得跳过**或用 Claude 自己完成
-
-3. **失败处理**：如果 MCP 调用失败：
-   - 重试最多 2 次
-   - 如果仍然失败，**询问用户**是否允许 Claude 接管
-   - **不得静默降级**到 Claude 执行
-
-4. **验证机制**：每个阶段完成后，在输出中明确标注实际使用的模型：
-   ```
-   ✅ Phase {N} 完成 | 执行模型: {实际使用的模型}
-   ```
-
-### 模型能力定位
-
-| 模型 | 核心优势 | 最佳场景 |
-|------|----------|----------|
-| **Claude Opus 4.5** | 精细控制、代码质量、任务协调 | 规划、Debug、重构、协调 |
-| **Codex (GPT-5.2)** | 强推理、复杂开发、生态成熟 | 新功能实现、API集成、脚本 |
-| **Gemini 3 Pro** | 超长上下文、多模态、视觉理解 | UI/UX、项目分析、看图写码 |
-
-### 路由-模型分配矩阵
-
-#### DIRECT_TEXT (文本任务)
-
-| 阶段 | 模型 | 命令 | 理由 |
-|------|------|------|------|
-| 执行 | **Claude** | 直接执行 | 精细修改，快速响应 |
-
-#### DIRECT_CODE (代码任务)
-
-| 阶段 | 模型 | MCP 工具 | 理由 |
-|------|------|----------|------|
-| Phase 1: 执行 | **Codex** | `mcp__codex-cli__codex` | 代码专精 |
-
-#### PLANNED (21-45分)
-
-| 阶段 | 模型 | MCP 工具 | 理由 |
-|------|------|----------|------|
-| Phase 1: 规划 | **Claude** | 直接执行 | 任务分析和协调 |
-| Phase 2: 实现 | **Codex** | `mcp__codex-cli__codex` | 复杂功能开发 |
-| Phase 3: 审查 | **Codex** | `mcp__codex-cli__codex` | 专业代码审查 |
-
-#### RALPH (46-70分)
-
-| 阶段 | 模型 | MCP 工具 | 理由 |
-|------|------|----------|------|
-| Phase 1: 分析 | **Claude** | 直接执行 | 任务分解和依赖识别 |
-| Phase 2: 规划 | **Codex** | `mcp__codex-cli__codex` | 代码实施规划 |
-| Phase 3: 执行 | **Codex** | `mcp__codex-cli__codex` | 批量功能开发 |
-| Phase 4: 审查 | **Codex** | `mcp__codex-cli__codex` | 综合审查 |
-
-#### ARCHITECT (71-100分)
-
-| 阶段 | 模型 | MCP 工具 | 理由 |
-|------|------|----------|------|
-| Phase 1: 架构分析 | **Gemini** | `mcp__gemini-cli__ask-gemini` | 整个项目分析，超长上下文 |
-| Phase 2: 架构设计 | **Claude** | 直接执行 | 精细设计决策 |
-| Phase 3: 实施规划 | **Codex** | `mcp__codex-cli__codex` | 代码实施规划 |
-| Phase 4: 分阶段实施 | **Codex** | `mcp__codex-cli__codex` | 批量开发 |
-| Phase 5: 验收审查 | **Codex** | `mcp__codex-cli__codex` | 深度审查 |
-
-#### UI_FLOW
-
-| 阶段 | 模型 | MCP 工具 | 理由 |
-|------|------|----------|------|
-| Phase 1: UI设计 | **Gemini** | `mcp__gemini-cli__ask-gemini` | 多模态，看图写码 |
-| Phase 2: 实现 | **Gemini** | `mcp__gemini-cli__ask-gemini` | UI组件开发 |
-| Phase 3: 预览 | **Claude** | 直接执行 | 验证和微调 |
-
----
-
-## 进度追踪
-
-**必须使用 TodoWrite 工具追踪任务进度**：
-
-1. 开始执行前，创建任务列表
-2. 每个阶段开始时，更新为 `in_progress`
-3. 每个阶段完成时，标记为 `completed`
-4. 同时只有一个任务处于 `in_progress` 状态
+| 模块 | 功能 | 版本 |
+|------|------|------|
+| `modules/scoring.md` | 6 维度加权评分系统 | v1.0 |
+| `modules/routing.md` | 路由决策矩阵 | v1.0 |
+| `modules/checkpoint.md` | 原子检查点与恢复机制 | **v2.0** |
+| `modules/recovery.md` | 错误处理与恢复策略 | **v2.0** |
+| `modules/review.md` | 两阶段审查系统 | v1.0 |
+| `modules/mcp-dispatch.md` | MCP 强制调用与降级规则 | **v5.0** |
+| `modules/config-schema.md` | 配置验证规范 | **v3.0 新增** |
+| `modules/logging.md` | 结构化日志系统 | **v1.0 新增** |
