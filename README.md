@@ -1,6 +1,6 @@
-# Delta SkillPack v3.0.0
+# Delta SkillPack v5.2.0
 
-> 🚀 智能任务执行器 - 统一入口，量化决策，多模型协作
+> 🚀 智能任务执行器 - 统一入口，量化决策，多模型协作，异步并行执行
 
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet)](https://claude.ai/claude-code)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -10,8 +10,10 @@
 - 🎯 **统一入口** - `/do "任务"` 一个命令搞定一切
 - 🧠 **量化决策** - 6 维度加权评分，决策可追溯
 - 🤖 **多模型协作** - Claude + Codex + Gemini 智能分工
-- 💾 **中断恢复** - 检查点机制，长任务可安全中断
+- 💾 **中断恢复** - 原子检查点机制，长任务可安全中断
 - ✅ **质量保证** - 两阶段审查，规格合规 + 代码质量
+- ⚡ **异步并行** - 无依赖任务并行执行，显著提升效率 (v5.2)
+- 🖥️ **CLI 后备** - MCP 失败时自动降级到 CLI 直接调用 (v5.1)
 
 ## 快速开始
 
@@ -72,6 +74,9 @@ model_reasoning_effort = "xhigh"
 |------|------|
 | `--quick, -q` | 强制 DIRECT 路由，跳过规划 |
 | `--deep, -d` | 强制 RALPH 路由，深度分析 |
+| `--parallel` | 强制启用并行执行 (v5.2) |
+| `--no-parallel` | 强制禁用并行执行 (v5.2) |
+| `--cli` | 强制使用 CLI 直接调用（绕过 MCP）(v5.1) |
 | `--explain, -e` | 仅显示评分和路由决策 |
 | `--resume` | 从最近检查点恢复 |
 | `--resume <task_id>` | 恢复指定任务 |
@@ -81,6 +86,8 @@ model_reasoning_effort = "xhigh"
 ```bash
 /do "实现用户认证" --quick       # 跳过规划
 /do "重构整个系统" --deep        # 强制深度分析
+/do "实现多个功能" --parallel    # 强制并行执行
+/do "fix bug" --cli              # CLI 直接调用
 /do "添加按钮" --explain         # 仅显示路由决策
 /do --resume                     # 恢复中断任务
 ```
@@ -204,7 +211,7 @@ delta-skillpack/
 
 ```json
 {
-  "version": "3.0",
+  "version": "5.0",
   "routing": {
     "weights": {
       "scope": 25,
@@ -222,11 +229,21 @@ delta-skillpack/
   },
   "checkpoint": {
     "auto_save": true,
+    "atomic_writes": true,
+    "backup_count": 3,
     "save_interval_minutes": 5
   },
-  "review": {
-    "enabled": true,
-    "auto_fix": true
+  "mcp": {
+    "timeout_seconds": 180,
+    "auto_fallback_to_cli": true
+  },
+  "parallel": {
+    "enabled": false,
+    "max_concurrent_tasks": 3,
+    "poll_interval_seconds": 5,
+    "task_timeout_seconds": 300,
+    "allow_cross_model_parallel": true,
+    "fallback_to_serial_on_failure": true
   }
 }
 ```
@@ -240,13 +257,36 @@ delta-skillpack/
 
 ## 版本历史
 
-### v3.0.0 (2026-01-18)
+### v5.2.0 (2026-01-19)
+- ⚡ **异步并行执行** - 无依赖任务并行执行，显著提升效率
+- 📊 **DAG 依赖分析** - 自动构建任务依赖图，识别可并行任务
+- 🌊 **波次管理** - 按依赖分组，同一波次内并行执行
+- 🔀 **跨模型并行** - Codex + Gemini 同时工作
+- 📡 **TaskOutput 轮询** - 定期检查后台任务状态
+- 🔄 **并行恢复** - 中断后可恢复正在执行的并行任务
+- 🆕 `--parallel` / `--no-parallel` 命令选项
+
+### v5.1.0 (2026-01-18)
+- 🖥️ CLI 直接调用后备机制
+- 🔄 MCP 超时自动降级到 CLI
+- 📏 任务粒度控制，大任务自动拆分
+
+### v5.0.0 (2026-01-18)
+- ⚛️ 原子检查点，SHA-256 校验和保护
+- 📝 结构化 JSONL 日志系统
+- 🎯 智能 MCP 降级策略
+
+### v4.0.0 (2026-01-17)
+- 🔧 MCP 强制调用约束
+- 🔁 循环执行引擎 (RALPH/ARCHITECT)
+- ⚙️ DIRECT_TEXT/DIRECT_CODE 路由分离
+
+### v3.0.0 (2026-01-16)
 - 🎯 统一入口 `/do` 命令
 - 🧠 6 维度量化评分系统
 - 🤖 多模型协作 (Claude + Codex + Gemini)
 - 💾 检查点中断恢复机制
 - ✅ 两阶段审查系统
-- 📦 MCP 服务器集成
 
 ## License
 

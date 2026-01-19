@@ -1,6 +1,6 @@
 # OpenAlpha
 
-智能任务执行器 v4.0.0 - 统一入口，量化决策，多模型协作，MCP 强制调用
+智能任务执行器 v5.2.0 - 统一入口，量化决策，多模型协作，**异步并行执行**
 
 ## 快速开始
 
@@ -13,7 +13,32 @@
 
 # 从中断点恢复
 /do --resume
+
+# 启用并行执行（同时执行无依赖任务）
+/do "build complete CMS" --parallel
+
+# 使用 CLI 直接调用（绕过 MCP）
+/do "fix bug" --cli
 ```
+
+## v5.2 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **异步并行执行** | 使用 `run_in_background` 同时启动多个后台任务 |
+| **DAG 依赖分析** | 自动构建任务依赖图，识别可并行任务 |
+| **波次管理** | 按依赖分组，同一波次内并行执行 |
+| **跨模型并行** | Codex + Gemini 同时工作 |
+| **TaskOutput 轮询** | 定期检查后台任务状态，收集结果 |
+| **并行恢复** | 中断后可恢复正在执行的并行任务 |
+
+## v5.1 特性
+
+| 特性 | 说明 |
+|------|------|
+| **CLI 直接调用** | `--cli` 标志强制使用 Bash 直接调用 Codex/Gemini |
+| **自动 CLI 降级** | MCP 超时后自动切换到 CLI 直接调用 |
+| **三层防御策略** | 任务粒度拆分 → MCP 重试 → CLI 降级 |
 
 ## 命令参考
 
@@ -47,6 +72,9 @@
 |------|------|
 | `-q, --quick` | 强制 DIRECT_CODE 路由，跳过规划 |
 | `-d, --deep` | 强制 RALPH 路由，深度分析 |
+| `--parallel` | 强制启用并行执行（v5.2 新增） |
+| `--no-parallel` | 强制禁用并行执行（v5.2 新增） |
+| `--cli` | 强制使用 CLI 直接调用（绕过 MCP） |
 | `-e, --explain` | 仅显示评分和路由决策 |
 | `--resume` | 从最近检查点恢复 |
 | `--resume <task_id>` | 恢复指定任务 |
@@ -72,9 +100,11 @@
 | **DIRECT_TEXT** | 线性 | 1 | 立即行动 | Claude |
 | **DIRECT_CODE** | 线性 | 1 | 立即行动 | **Codex** |
 | **PLANNED** | 线性 | 3 | 计划先行 | Claude + **Codex** |
-| **RALPH** | **循环** | 4 | 分而治之 | Claude + **Codex** |
-| **ARCHITECT** | **循环** | 5 | 架构优先 | **Gemini** + Claude + **Codex** |
+| **RALPH** | **循环/并行** | 4 | 分而治之 | Claude + **Codex** |
+| **ARCHITECT** | **循环/并行** | 5 | 架构优先 | **Gemini** + Claude + **Codex** |
 | **UI_FLOW** | 线性 | 3 | 用户至上 | **Gemini** |
+
+**并行模式 (v5.2)**: RALPH 和 ARCHITECT 路由支持并行执行，同一波次内的无依赖子任务可同时启动。
 
 ### 复杂度信号
 
@@ -127,9 +157,35 @@ RALPH 和 ARCHITECT 路由使用循环执行模式，通过 Stop Hook 实现"任
 - 最大迭代次数: 20
 - 自动检查点间隔: 每 3 个子任务
 
-### MCP 强制调用 (v4.0)
+### 异步并行执行 (v5.2 新增)
 
-v4.0 强制要求指定阶段必须通过 MCP 工具调用对应模型，禁止 Claude 替代：
+当 `parallel.enabled = true` 或使用 `--parallel` 时，子任务可并行执行：
+
+```
+1. 构建任务依赖图 (DAG)
+   ↓
+2. 计算执行波次（无依赖任务分到同一波次）
+   ↓
+3. 并行启动当前波次所有任务
+   │ ┌─────┬─────┬─────┐
+   │ │Task1│Task2│Task3│ ← run_in_background: true
+   │ └─────┴─────┴─────┘
+   ↓
+4. TaskOutput 轮询收集结果
+   ↓
+5. 波次完成后进入下一波次
+   ↓
+6. 回到 Step 3 直到全部完成
+```
+
+**性能提升**:
+- 5 个无依赖子任务: ~3x 提速
+- UI + Backend 混合: ~1.7x 提速
+- 多文件审查: ~2.7x 提速
+
+### MCP 强制调用与 CLI 后备 (v5.1)
+
+指定阶段必须通过 MCP 工具调用对应模型，MCP 失败时可降级到 CLI 直接调用：
 
 #### 强制使用 Codex 的阶段
 
@@ -149,8 +205,21 @@ v4.0 强制要求指定阶段必须通过 MCP 工具调用对应模型，禁止 
 
 **核心规则**:
 1. ⛔ 禁止替代 - 指定模型阶段禁止 Claude 自己执行
-2. ❌ 禁止静默降级 - MCP 失败后必须询问用户，不得自动降级
-3. ✅ 验证输出 - 每阶段明确标注实际使用的模型
+2. 🖥️ CLI 后备 - MCP 失败后可切换到 CLI 直接调用
+3. ❌ 禁止静默降级到 Claude - 代码任务需用户确认
+4. ✅ 验证输出 - 每阶段明确标注实际使用的模型
+
+### CLI 直接调用 (v5.1 新增)
+
+当 MCP 超时或使用 `--cli` 标志时，直接通过 Bash 调用 CLI：
+
+```bash
+# Codex CLI
+/cli-codex "fix bug in auth.ts"
+
+# Gemini CLI
+/cli-gemini "@src/components analyze UI patterns"
+```
 
 ## AI 模型分工
 
@@ -215,7 +284,7 @@ v4.0 强制要求指定阶段必须通过 MCP 工具调用对应模型，禁止 
 
 ```json
 {
-  "version": "2.0",
+  "version": "5.0",
   "knowledge": {
     "default_notebook": "your-notebook-id",
     "auto_query": true
@@ -240,9 +309,23 @@ v4.0 强制要求指定阶段必须通过 MCP 工具调用对应模型，禁止 
     "save_interval_minutes": 5,
     "max_history": 10
   },
-  "review": {
-    "enabled": true,
-    "auto_fix": true
+  "mcp": {
+    "timeout_seconds": 180,
+    "auto_fallback_to_cli": true
+  },
+  "cli": {
+    "codex_path": "codex",
+    "gemini_path": "gemini",
+    "prefer_cli_over_mcp": false,
+    "cli_timeout_seconds": 300
+  },
+  "parallel": {
+    "enabled": false,
+    "max_concurrent_tasks": 3,
+    "poll_interval_seconds": 5,
+    "task_timeout_seconds": 300,
+    "allow_cross_model_parallel": true,
+    "fallback_to_serial_on_failure": true
   },
   "output": {
     "current_dir": ".skillpack/current",
@@ -298,9 +381,11 @@ model_reasoning_effort = "xhigh"
 
 ## 依赖插件
 
-- **delta-skillpack v4.0.0** - 提供 `/do` 命令及相关 skills（已全局安装）
-  - 新增：DIRECT_TEXT / DIRECT_CODE 分流
-  - 新增：80+ UI 关键词匹配
-  - 新增：MCP 强制调用规则
-  - 新增：循环执行引擎 (Loop Engine)
-  - 新增：Stop Hook 自动迭代
+- **delta-skillpack v5.2.0** - 提供 `/do` 命令及相关 skills（已全局安装）
+  - v5.2 新增：异步并行执行（`--parallel` / `--no-parallel`）
+  - v5.2 新增：DAG 依赖分析、波次管理
+  - v5.2 新增：跨模型并行（Codex + Gemini 同时工作）
+  - v5.2 新增：TaskOutput 轮询收集、并行恢复
+  - v5.1：`--cli` 标志，CLI 直接调用，自动 CLI 降级
+  - v5.0：原子检查点、结构化日志、任务粒度控制
+  - v4.0：MCP 强制调用、循环执行引擎

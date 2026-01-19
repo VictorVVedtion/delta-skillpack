@@ -1,10 +1,10 @@
 ---
 name: delta:do
-description: 智能任务执行器 - 自动评分、路由、循环执行
-version: 5.0.0
+description: 智能任务执行器 - 自动评分、路由、异步并行执行
+version: 5.2.0
 ---
 
-# delta:do - 智能任务执行器 v5.0.0
+# delta:do - 智能任务执行器 v5.2.0
 
 ## 核心法则
 
@@ -13,19 +13,31 @@ version: 5.0.0
 3. **中断可恢复** - 检查点机制，长任务安全中断
 4. **质量保证** - 两阶段审查，规格合规 + 代码质量
 5. **立即行动** - 不只解释，真正执行
+6. **异步并行** - 同时执行多个无依赖任务，显著提升效率 (v5.2)
 
 ---
 
-## v5.0 新特性
+## v5.2 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **异步并行执行** | 使用 `run_in_background` 同时启动多个任务 |
+| **DAG 依赖分析** | 自动构建任务依赖图，识别可并行任务 |
+| **波次管理** | 按依赖分组，同一波次内并行执行 |
+| **跨模型并行** | Codex + Gemini 同时工作 |
+| **TaskOutput 轮询** | 定期检查后台任务状态，收集结果 |
+| **并行恢复** | 中断后可恢复正在执行的并行任务 |
+
+## v5.0/5.1 特性
 
 | 特性 | 说明 |
 |------|------|
 | **原子检查点** | SHA-256 校验和 + write-rename 模式，数据不丢失 |
+| **CLI 直接调用** | `--cli` 标志绕过 MCP，直接通过 Bash 调用 |
+| **自动 CLI 降级** | MCP 超时后自动切换到 CLI |
 | **结构化日志** | JSONL 格式执行日志，便于追踪和分析 |
 | **任务粒度控制** | 自动拆分大任务，避免 MCP 超时 |
 | **智能降级策略** | 文档任务可快速降级，代码任务需确认 |
-| **指数退避重试** | MCP 失败时智能重试，减少人工干预 |
-| **多版本备份** | 保留 3 个检查点备份，提高恢复成功率 |
 
 ---
 
@@ -35,6 +47,8 @@ version: 5.0.0
 /do <任务描述>                # 智能路由
 /do <任务描述> --quick        # 强制 DIRECT_CODE
 /do <任务描述> --deep         # 强制 RALPH
+/do <任务描述> --parallel     # 强制启用并行执行 (v5.2)
+/do <任务描述> --no-parallel  # 强制禁用并行执行 (v5.2)
 /do <任务描述> --explain      # 仅显示评分和路由
 /do --resume                  # 从检查点恢复
 /do --resume <task_id>        # 恢复指定任务
@@ -254,12 +268,13 @@ Phase 3 (100%): 预览验证 - Claude
 |------|------|------|
 | `modules/scoring.md` | 6 维度加权评分系统 | v1.0 |
 | `modules/routing.md` | 路由决策矩阵 | v1.0 |
-| `modules/checkpoint.md` | 检查点与恢复机制 | **v2.0** |
-| `modules/recovery.md` | 错误处理与恢复策略 | **v2.0** |
+| `modules/checkpoint.md` | 检查点与恢复机制 | **v3.0** |
+| `modules/recovery.md` | 错误处理与恢复策略 | **v2.2** |
 | `modules/review.md` | 两阶段审查系统 | v1.0 |
-| `modules/mcp-dispatch.md` | MCP 强制调用规则 | **v5.0** |
-| `modules/config-schema.md` | 配置验证规范 | **v3.0 新增** |
-| `modules/logging.md` | 日志系统规范 | **v1.0 新增** |
+| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2** |
+| `modules/loop-engine.md` | 循环执行引擎 | **v5.2** |
+| `modules/config-schema.md` | 配置验证规范 | **v5.0** |
+| `modules/logging.md` | 日志系统规范 | v1.0 |
 
 ---
 

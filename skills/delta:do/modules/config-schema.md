@@ -8,7 +8,27 @@
 
 ## Schema 版本
 
-当前版本: **3.0**
+当前版本: **5.0**
+
+### v5.0 变更
+
+| 变更 | 说明 |
+|------|------|
+| 新增 `parallel` 配置块 | 异步并行执行相关配置 |
+| 新增 `parallel.enabled` | 是否启用并行执行（默认 false） |
+| 新增 `parallel.max_concurrent_tasks` | 最大并发任务数 |
+| 新增 `parallel.poll_interval_seconds` | TaskOutput 轮询间隔 |
+| 新增 `parallel.task_timeout_seconds` | 单任务超时时间 |
+| 新增 `parallel.allow_cross_model_parallel` | 允许跨模型并行 |
+| 新增 `parallel.fallback_to_serial_on_failure` | 失败时降级到串行 |
+
+### v4.0 变更
+
+| 变更 | 说明 |
+|------|------|
+| 新增 `mcp` 配置块 | MCP 调用相关配置 |
+| 新增 `cli` 配置块 | CLI 直接调用相关配置 |
+| 新增 `mcp.auto_fallback_to_cli` | 自动降级到 CLI |
 
 ---
 
@@ -26,8 +46,8 @@
   "properties": {
     "version": {
       "type": "string",
-      "enum": ["3.0"],
-      "default": "3.0",
+      "enum": ["5.0"],
+      "default": "5.0",
       "description": "配置 Schema 版本"
     },
     "knowledge": {
@@ -136,6 +156,53 @@
         "max_auto_retries": {"type": "integer", "minimum": 0, "maximum": 10, "default": 3},
         "auto_fix_syntax": {"type": "boolean", "default": true}
       }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600, "default": 180},
+        "max_retries": {"type": "integer", "minimum": 0, "maximum": 10, "default": 3},
+        "retry_delay_ms": {"type": "integer", "minimum": 500, "maximum": 60000, "default": 2000},
+        "auto_chunk_large_tasks": {"type": "boolean", "default": true},
+        "chunk_max_tokens": {"type": "integer", "minimum": 1000, "maximum": 10000, "default": 5000},
+        "show_progress_after_seconds": {"type": "integer", "minimum": 10, "maximum": 300, "default": 60},
+        "auto_fallback_to_cli": {"type": "boolean", "default": true}
+      }
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "codex_path": {"type": "string", "default": "codex"},
+        "gemini_path": {"type": "string", "default": "gemini"},
+        "prefer_cli_over_mcp": {"type": "boolean", "default": false},
+        "cli_timeout_seconds": {"type": "integer", "minimum": 60, "maximum": 1800, "default": 300},
+        "auto_context": {"type": "boolean", "default": true},
+        "max_context_files": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10},
+        "max_lines_per_file": {"type": "integer", "minimum": 100, "maximum": 2000, "default": 500}
+      }
+    },
+    "parallel": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
+        "max_concurrent_tasks": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
+        "poll_interval_seconds": {"type": "integer", "minimum": 1, "maximum": 60, "default": 5},
+        "task_timeout_seconds": {"type": "integer", "minimum": 60, "maximum": 1800, "default": 300},
+        "allow_cross_model_parallel": {"type": "boolean", "default": true},
+        "fallback_to_serial_on_failure": {"type": "boolean", "default": true},
+        "auto_dag_analysis": {"type": "boolean", "default": true},
+        "wave_completion_strategy": {
+          "type": "string",
+          "enum": ["wait_all", "continue_on_success"],
+          "default": "wait_all"
+        }
+      }
     }
   }
 }
@@ -151,7 +218,7 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `version` | string | `"3.0"` | Schema 版本 |
+| `version` | string | `"5.0"` | Schema 版本 |
 | `knowledge` | object | `{}` | 知识库相关配置 |
 | `routing` | object | `{}` | 路由评分与阈值 |
 | `checkpoint` | object | `{}` | 检查点保存配置 |
@@ -159,6 +226,9 @@
 | `output` | object | `{}` | 输出目录与归档策略 |
 | `loop` | object | `{}` | 迭代执行限制 |
 | `recovery` | object | `{}` | 自动恢复配置 |
+| `mcp` | object | `{}` | MCP 调用配置 (v4.0 新增) |
+| `cli` | object | `{}` | CLI 直接调用配置 (v4.0 新增) |
+| `parallel` | object | `{}` | 并行执行配置 (v5.0 新增) |
 
 ### knowledge
 
@@ -229,6 +299,43 @@
 | `recovery.max_auto_retries` | integer | `3` | 最大自动重试次数 |
 | `recovery.auto_fix_syntax` | boolean | `true` | 自动修复简单语法错误 |
 
+### mcp (v4.0 新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `mcp.timeout_seconds` | integer | `180` | MCP 调用超时时间 (秒) |
+| `mcp.max_retries` | integer | `3` | MCP 最大重试次数 |
+| `mcp.retry_delay_ms` | integer | `2000` | 重试间隔 (毫秒) |
+| `mcp.auto_chunk_large_tasks` | boolean | `true` | 自动拆分大任务 |
+| `mcp.chunk_max_tokens` | integer | `5000` | 任务拆分阈值 (tokens) |
+| `mcp.show_progress_after_seconds` | integer | `60` | 显示进度提示阈值 (秒) |
+| `mcp.auto_fallback_to_cli` | boolean | `true` | MCP 失败后自动降级到 CLI |
+
+### cli (v4.0 新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `cli.codex_path` | string | `"codex"` | Codex CLI 可执行文件路径 |
+| `cli.gemini_path` | string | `"gemini"` | Gemini CLI 可执行文件路径 |
+| `cli.prefer_cli_over_mcp` | boolean | `false` | 优先使用 CLI（跳过 MCP） |
+| `cli.cli_timeout_seconds` | integer | `300` | CLI 命令超时时间 (秒) |
+| `cli.auto_context` | boolean | `true` | 自动收集相关文件上下文 |
+| `cli.max_context_files` | integer | `10` | 最大上下文文件数 |
+| `cli.max_lines_per_file` | integer | `500` | 每个文件最大行数 |
+
+### parallel (v5.0 新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `parallel.enabled` | boolean | `false` | 是否启用并行执行 |
+| `parallel.max_concurrent_tasks` | integer | `3` | 最大并发任务数 (1-10) |
+| `parallel.poll_interval_seconds` | integer | `5` | TaskOutput 轮询间隔 (秒) |
+| `parallel.task_timeout_seconds` | integer | `300` | 单任务超时时间 (秒) |
+| `parallel.allow_cross_model_parallel` | boolean | `true` | 允许 Codex + Gemini 同时执行 |
+| `parallel.fallback_to_serial_on_failure` | boolean | `true` | 并行失败时降级到串行模式 |
+| `parallel.auto_dag_analysis` | boolean | `true` | 自动分析任务依赖关系 |
+| `parallel.wave_completion_strategy` | string | `"wait_all"` | 波次完成策略: `wait_all` 或 `continue_on_success` |
+
 ---
 
 ## 验证流程
@@ -269,7 +376,7 @@
 ⚠️ 配置验证失败
 ════════════════════════════════════════════════════════════
 文件: .skillpackrc
-Schema: 3.0
+Schema: 4.0
 错误数: {count}
 ────────────────────────────────────────────────────────────
 [CFG-001] 路径: {json_path}
@@ -280,6 +387,70 @@ Schema: 3.0
 
 ---
 
+## 迁移指南 (v4.0 → v5.0)
+
+1. **版本升级**: 将 `version` 改为 `"5.0"`。
+2. **新增 parallel 配置块**: 添加 `parallel` 配置块（默认禁用）。
+3. **启用并行执行**: 设置 `parallel.enabled: true` 以启用异步并行执行。
+4. **调整并发限制**: 根据系统资源调整 `max_concurrent_tasks`。
+
+### 最小迁移示例
+
+```json
+{
+  "version": "5.0",
+  "parallel": {
+    "enabled": false
+  }
+}
+```
+
+### 启用并行执行示例
+
+```json
+{
+  "version": "5.0",
+  "parallel": {
+    "enabled": true,
+    "max_concurrent_tasks": 3,
+    "poll_interval_seconds": 5,
+    "task_timeout_seconds": 300,
+    "allow_cross_model_parallel": true,
+    "fallback_to_serial_on_failure": true
+  }
+}
+```
+
+迁移完成后运行 Schema 校验，确保无错误提示。
+
+---
+
+## 迁移指南 (v3.0 → v4.0)
+
+1. **版本升级**: 将 `version` 改为 `"4.0"`。
+2. **新增 MCP 配置块**: 添加 `mcp` 配置块，按默认值补齐。
+3. **新增 CLI 配置块**: 添加 `cli` 配置块，按默认值补齐。
+4. **启用自动 CLI 降级**: 设置 `mcp.auto_fallback_to_cli: true` 以启用 MCP 超时后自动降级到 CLI。
+
+### 最小迁移示例
+
+```json
+{
+  "version": "4.0",
+  "mcp": {
+    "auto_fallback_to_cli": true
+  },
+  "cli": {
+    "prefer_cli_over_mcp": false,
+    "cli_timeout_seconds": 300
+  }
+}
+```
+
+迁移完成后运行 Schema 校验，确保无错误提示。
+
+---
+
 ## 迁移指南 (v2.0 → v3.0)
 
 1. **版本升级**: 将 `version` 改为 `"3.0"`。
@@ -287,5 +458,3 @@ Schema: 3.0
 3. **历史保留迁移**: 如 v2 使用 `checkpoint.max_history`，请迁移到 `output.max_history`。
 4. **日志格式统一**: `logging.format` 固定为 `jsonl`，移除不支持的格式值。
 5. **移除未知字段**: v3 禁止额外字段，需删除未在 Schema 中定义的键。
-
-迁移完成后运行 Schema 校验，确保无错误提示。
