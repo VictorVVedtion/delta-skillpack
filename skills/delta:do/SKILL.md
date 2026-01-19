@@ -1,7 +1,7 @@
 ---
 name: delta:do
-description: 智能任务执行器 - 自动评分、路由、异步并行执行
-version: 5.2.0
+description: 智能任务执行器 - 自动评分、路由、异步并行执行、CLI优先模式
+version: 5.2.1
 ---
 
 # delta:do - 智能任务执行器 v5.2.0
@@ -271,7 +271,7 @@ Phase 3 (100%): 预览验证 - Claude
 | `modules/checkpoint.md` | 检查点与恢复机制 | **v3.0** |
 | `modules/recovery.md` | 错误处理与恢复策略 | **v2.2** |
 | `modules/review.md` | 两阶段审查系统 | v1.0 |
-| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2** |
+| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2.1** |
 | `modules/loop-engine.md` | 循环执行引擎 | **v5.2** |
 | `modules/config-schema.md` | 配置验证规范 | **v5.0** |
 | `modules/logging.md` | 日志系统规范 | v1.0 |

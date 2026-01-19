@@ -32,13 +32,14 @@
 
 1. **立即行动** - 不要只是解释，要真正执行任务
 2. **量化决策** - 使用评分系统，决策有据可循
-3. **MCP 强制执行** - 指定模型必须通过 MCP 调用，禁止替代
-4. **循环执行** - RALPH/ARCHITECT 使用 Stop Hook 迭代直到完成
-5. **持续追踪** - 使用 TodoWrite 追踪进度
-6. **原子检查点** - SHA-256 校验 + 多版本备份，关键节点安全保存
-7. **两阶段审查** - 规格合规 + 代码质量双保障
-8. **结构化日志** - JSONL 格式记录执行过程
-9. **异步并行** - 无依赖任务并行执行，显著提升效率 (v5.2)
+3. **CLI 优先** - 当 `cli.prefer_cli_over_mcp: true` 时，**完全跳过 MCP**，直接使用 CLI
+4. **MCP 强制执行** - CLI 优先关闭时，指定模型必须通过 MCP 调用
+5. **循环执行** - RALPH/ARCHITECT 使用 Stop Hook 迭代直到完成
+6. **持续追踪** - 使用 TodoWrite 追踪进度
+7. **原子检查点** - SHA-256 校验 + 多版本备份，关键节点安全保存
+8. **两阶段审查** - 规格合规 + 代码质量双保障
+9. **结构化日志** - JSONL 格式记录执行过程
+10. **异步并行** - 无依赖任务并行执行，显著提升效率 (v5.2)
 
 ---
 
@@ -60,6 +61,58 @@
 4. **注入上下文**：将查询结果用于后续所有阶段
 
 **铁律：不查询知识库就不开始执行（如已配置）**
+
+---
+
+## Step 0.5: 执行模式检测（关键）
+
+读取 `.skillpackrc` 后，立即检查执行模式：
+
+```
+检查 cli.prefer_cli_over_mcp
+    │
+    ├── true (CLI 优先模式)
+    │   ════════════════════════════════════════════════════════════
+    │   🖥️ CLI 优先模式已启用
+    │   ════════════════════════════════════════════════════════════
+    │   所有 Codex/Gemini 调用将直接使用 CLI (Bash)
+    │   跳过 MCP 协议，避免 stdio 通道中断
+    │   ────────────────────────────────────────────────────────────
+    │
+    │   后续所有 mandatory 阶段：
+    │   - Codex → 使用 `codex exec "<prompt>" -s workspace-write`
+    │   - Gemini → 使用 `gemini "<prompt>"`
+    │
+    └── false (MCP 模式)
+        继续使用 MCP 调用 (mcp__codex-cli__codex 等)
+```
+
+### CLI 优先模式下的调用方式
+
+**Codex 任务**（代替 `mcp__codex-cli__codex`）：
+```bash
+codex exec "任务描述
+
+相关文件:
+- path/to/file1.ts
+- path/to/file2.ts
+
+要求:
+1. 具体要求
+2. ..." -s workspace-write
+```
+
+**Gemini 任务**（代替 `mcp__gemini-cli__ask-gemini`）：
+```bash
+gemini "@path/to/files 任务描述"
+```
+
+### ⚠️ 铁律
+
+**当 `cli.prefer_cli_over_mcp: true` 时：**
+1. **禁止**调用任何 `mcp__codex-cli__*` 或 `mcp__gemini-cli__*` 工具
+2. **必须**使用 Bash 工具直接执行 CLI 命令
+3. 这是为了**彻底避免 MCP stdio 通道中断问题**
 
 ---
 
@@ -855,7 +908,7 @@ retry_policy:
 | `modules/checkpoint.md` | 原子检查点与恢复机制 | **v3.0** |
 | `modules/recovery.md` | 错误处理与恢复策略 | **v2.2** |
 | `modules/review.md` | 两阶段审查系统 | v1.0 |
-| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2** |
+| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2.1** |
 | `modules/loop-engine.md` | 循环执行引擎 | **v5.2** |
 | `modules/config-schema.md` | 配置验证规范 | **v5.0** |
 | `modules/logging.md` | 结构化日志系统 | v1.0 |

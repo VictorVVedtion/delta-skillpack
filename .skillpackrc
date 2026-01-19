@@ -1,4 +1,5 @@
 {
+  "version": "5.0",
   "knowledge": {
     "default_notebook": "ffa73340-e818-4bcc-9809-a58e62e52982",
     "auto_query": true
@@ -6,5 +7,22 @@
   "output": {
     "current_dir": ".skillpack/current",
     "history_dir": ".skillpack/history"
+  },
+  "mcp": {
+    "timeout_seconds": 120,
+    "max_retries": 1,
+    "auto_fallback_to_cli": true
+  },
+  "cli": {
+    "prefer_cli_over_mcp": true,
+    "cli_timeout_seconds": 600,
+    "auto_context": true,
+    "max_context_files": 15,
+    "max_lines_per_file": 800
+  },
+  "parallel": {
+    "enabled": true,
+    "max_concurrent_tasks": 3,
+    "fallback_to_serial_on_failure": true
   }
 }
