@@ -1,8 +1,8 @@
-# MCP 调度模块 v5.2.1
+# MCP 调度模块 v5.3.0
 
 ## 概述
 
-本模块定义了多模型协作的强制调用规则，确保正确的模型被用于正确的阶段。v5.2 新增 **异步并行调度**，v5.2.1 强化 **CLI 优先模式**，彻底解决 MCP 中断问题。
+本模块定义了多模型协作的强制调用规则，确保正确的模型被用于正确的阶段。v5.2 新增 **异步并行调度**，v5.3.0 强化 **CLI 优先模式**，彻底解决 MCP 中断和 TTY 依赖问题。
 
 ---
 
@@ -42,8 +42,8 @@
 
 | 原 MCP 调用 | CLI 替代命令 |
 |-------------|--------------|
-| `mcp__codex-cli__codex` | `codex exec "<prompt>" -s workspace-write` |
-| `mcp__gemini-cli__ask-gemini` | `gemini "<prompt>"` |
+| `mcp__codex-cli__codex` | `codex exec "<prompt>" --full-auto` |
+| `mcp__gemini-cli__ask-gemini` | `gemini "<prompt>" -s --yolo` |
 
 **优势：**
 - ✅ 彻底避免 MCP stdio 通道中断
@@ -54,7 +54,10 @@
 **CLI 调用示例：**
 
 ```bash
-# Codex CLI（代替 mcp__codex-cli__codex）
+# Codex CLI（非交互式执行）
+# 关键参数:
+#   exec        - 非交互式子命令（必须）
+#   --full-auto - 自动批准 + workspace-write（推荐）
 codex exec "任务: 实现用户登录接口
 
 相关文件:
@@ -64,10 +67,14 @@ codex exec "任务: 实现用户登录接口
 要求:
 1. 验证用户凭据
 2. 生成 JWT token
-3. 处理错误情况" -s workspace-write
+3. 处理错误情况" --full-auto
 
-# Gemini CLI（代替 mcp__gemini-cli__ask-gemini）
-gemini "@src/components 分析 UI 组件结构，设计登录表单"
+# Gemini CLI（非交互式执行）
+# 关键参数:
+#   positional prompt - 直接传递任务（非交互式）
+#   -s                - 沙箱模式
+#   --yolo            - 自动批准所有操作（推荐）
+gemini "@src/components 分析 UI 组件结构，设计登录表单" -s --yolo
 ```
 
 ### MCP 模式（默认）
@@ -80,7 +87,8 @@ gemini "@src/components 分析 UI 组件结构，设计登录表单"
 
 | 版本 | 特性 |
 |------|------|
-| **v5.2.1** | CLI 优先模式强化，执行模式决策树，彻底解决 MCP 中断 |
+| **v5.3.0** | 修复 CLI 非交互式执行：Codex `--full-auto`，Gemini `--yolo` |
+| v5.2.1 | CLI 优先模式强化，执行模式决策树，彻底解决 MCP 中断 |
 | v5.2 | 异步并行调度、波次管理、跨模型并行、TaskOutput 轮询 |
 | v5.1 | CLI 直接调用后备机制 |
 | v5.0 | 任务粒度控制、智能降级策略 |
@@ -652,12 +660,16 @@ MCP 调用失败
 
 **Codex CLI**：
 ```bash
-codex exec "<prompt>" -s workspace-write --json
+# --full-auto = -a on-request + -s workspace-write
+# 推荐：非交互式执行，自动批准所有操作
+codex exec "<prompt>" --full-auto
 ```
 
 **Gemini CLI**：
 ```bash
-gemini "<prompt>" --model gemini-3-pro-preview
+# -s 沙箱模式 + --yolo 自动批准
+# 推荐：非交互式执行，无需 TTY
+gemini "<prompt>" -s --yolo
 ```
 
 ### 自动 CLI 降级条件

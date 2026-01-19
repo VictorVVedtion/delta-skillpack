@@ -1,4 +1,4 @@
-# /do Skill - 执行指令 v5.2.0
+# /do Skill - 执行指令 v5.3.0
 
 当用户调用 `/do <任务>` 时，按以下流程执行：
 
@@ -43,11 +43,27 @@
 
 ---
 
-## Step 0: 知识库初始化（强制）
+## Step 0: 配置加载与知识库初始化
 
 在任何阶段开始前：
 
-1. **检查配置**：读取项目根目录的 `.skillpackrc` 文件
+### 配置文件查找顺序
+
+```
+查找 .skillpackrc 配置文件
+    │
+    ├── 1. 项目根目录 ./.skillpackrc （优先级最高）
+    │      └── 存在 → 使用项目配置
+    │
+    └── 2. 全局目录 ~/.claude/.skillpackrc （默认配置）
+           └── 存在 → 使用全局配置
+```
+
+**合并规则**：项目配置覆盖全局配置的相同字段。
+
+### 知识库初始化
+
+1. **检查配置**：按上述顺序查找 `.skillpackrc` 文件
 2. **如果存在 `knowledge.default_notebook`**：
    ```
    ════════════════════════════════════════════════════════════
@@ -91,6 +107,8 @@
 
 **Codex 任务**（代替 `mcp__codex-cli__codex`）：
 ```bash
+# 使用 exec 子命令实现非交互式执行
+# --full-auto = -a on-request + -s workspace-write
 codex exec "任务描述
 
 相关文件:
@@ -99,20 +117,23 @@ codex exec "任务描述
 
 要求:
 1. 具体要求
-2. ..." -s workspace-write
+2. ..." --full-auto
 ```
 
 **Gemini 任务**（代替 `mcp__gemini-cli__ask-gemini`）：
 ```bash
-gemini "@path/to/files 任务描述"
+# 直接传递 prompt 实现非交互式
+# --yolo 自动批准所有工具调用
+gemini "@path/to/files 任务描述" -s --yolo
 ```
 
 ### ⚠️ 铁律
 
 **当 `cli.prefer_cli_over_mcp: true` 时：**
 1. **禁止**调用任何 `mcp__codex-cli__*` 或 `mcp__gemini-cli__*` 工具
-2. **必须**使用 Bash 工具直接执行 CLI 命令
-3. 这是为了**彻底避免 MCP stdio 通道中断问题**
+2. **必须**使用 Bash 工具 + `codex exec` / `gemini` 命令
+3. **必须**添加自动批准参数（`--full-auto` / `--yolo`）
+4. 这是为了**彻底避免 MCP stdio 通道中断和 TTY 依赖问题**
 
 ---
 

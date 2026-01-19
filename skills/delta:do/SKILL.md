@@ -1,10 +1,10 @@
 ---
 name: delta:do
-description: 智能任务执行器 - 自动评分、路由、异步并行执行、CLI优先模式
-version: 5.2.1
+description: 智能任务执行器 - 自动评分、路由、异步并行执行、CLI优先模式（修复非交互式执行）
+version: 5.3.0
 ---
 
-# delta:do - 智能任务执行器 v5.2.0
+# delta:do - 智能任务执行器 v5.3.0
 
 ## 核心法则
 
