@@ -26,7 +26,7 @@ from .executor import TaskExecutor
 
 
 @click.group()
-@click.version_option(version="5.4.1", prog_name="skillpack")
+@click.version_option(version="2.0.0", prog_name="skillpack")
 def cli():
     """Skillpack - 智能任务执行器 v5.4.0"""
     pass
@@ -165,37 +165,81 @@ def init(yes: bool):
 def history():
     """查看任务历史"""
     history_dir = Path(".skillpack/history")
-    
+
     if not history_dir.exists():
         click.echo("没有历史记录")
         return
-    
+
     entries = sorted(history_dir.iterdir(), reverse=True)
     if not entries:
         click.echo("没有历史记录")
         return
-    
+
     click.echo("任务历史:")
     for entry in entries[:10]:
         click.echo(f"  - {entry.name}")
 
 
+@cli.command()
+@click.option("--today", is_flag=True, help="显示今日统计")
+@click.option("--week", is_flag=True, help="显示本周统计")
+@click.option("--json", "as_json", is_flag=True, help="JSON 格式输出")
+@click.option("--export", type=click.Path(), help="导出到文件")
+def stats(today: bool, week: bool, as_json: bool, export: str):
+    """显示模型用量统计"""
+    from .usage import UsageStore, UsageAnalyzer, print_dashboard, summary_to_json
+
+    store = UsageStore()
+    analyzer = UsageAnalyzer(store)
+
+    # 确定时间范围
+    if today:
+        summary = analyzer.get_today_stats()
+        period_label = "今日"
+    elif week:
+        summary = analyzer.get_week_stats()
+        period_label = "本周"
+    else:
+        summary = analyzer.analyze()
+        period_label = "全部"
+
+    if as_json:
+        # JSON 格式输出
+        output = summary_to_json(summary)
+        if export:
+            Path(export).write_text(output, encoding="utf-8")
+            click.echo(f"已导出到 {export}")
+        else:
+            click.echo(output)
+        return
+
+    # 仪表盘格式输出
+    dashboard = print_dashboard(summary, period_label)
+
+    if export:
+        Path(export).write_text(dashboard, encoding="utf-8")
+        click.echo(f"已导出到 {export}")
+    else:
+        click.echo(dashboard)
+
+
 def _load_config() -> SkillpackConfig:
     """加载配置 - 完整解析 .skillpackrc"""
     # 查找配置文件：项目根目录 > 全局目录
-    config_paths = [
-        Path(".skillpackrc"),
-        Path.home() / ".claude" / ".skillpackrc",
-    ]
+    local_config = Path(".skillpackrc")
+    global_config = Path.home() / ".claude" / ".skillpackrc"
 
     data = {}
-    for config_path in config_paths:
-        if config_path.exists():
-            try:
-                data = json.loads(config_path.read_text())
-                break
-            except json.JSONDecodeError:
-                continue
+    if local_config.exists():
+        try:
+            data = json.loads(local_config.read_text())
+        except json.JSONDecodeError:
+            return SkillpackConfig()
+    elif global_config.exists():
+        try:
+            data = json.loads(global_config.read_text())
+        except json.JSONDecodeError:
+            return SkillpackConfig()
 
     if not data:
         return SkillpackConfig()

@@ -19,6 +19,13 @@ from .executor import (
     RalphExecutor,
     UIFlowExecutor,
 )
+from .usage import (
+    UsageRecord,
+    UsageStore,
+    UsageAnalyzer,
+    UsageSummary,
+    ModelStats,
+)
 
 __version__ = "5.4.1"
 __all__ = [
@@ -33,4 +40,10 @@ __all__ = [
     "PlannedExecutor",
     "RalphExecutor",
     "UIFlowExecutor",
+    # Usage tracking
+    "UsageRecord",
+    "UsageStore",
+    "UsageAnalyzer",
+    "UsageSummary",
+    "ModelStats",
 ]

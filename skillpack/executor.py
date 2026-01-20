@@ -7,14 +7,17 @@ v5.4.0: 集成 CLI 调度器，实现真实的 Codex/Gemini 调用。
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 import json
 import time
+import uuid
 
 from .models import TaskContext, ExecutionRoute, SkillpackConfig
 from .dispatch import ModelDispatcher, ModelType, DispatchResult, get_dispatcher
 from .ralph.dashboard import ProgressTracker, SimpleProgressTracker, Phase
+from .usage import UsageStore, UsageRecord
 
 
 @dataclass
@@ -35,10 +38,10 @@ class ExecutionStatus:
 class ExecutorStrategy(ABC):
     """执行器策略基类"""
 
-    def __init__(self, config: SkillpackConfig):
-        self.config = config
-        self.dispatcher = get_dispatcher(config)
-        self.output_dir = Path(config.output.current_dir)
+    def __init__(self, config: Optional[SkillpackConfig] = None):
+        self.config = config or SkillpackConfig()
+        self.dispatcher = get_dispatcher(self.config)
+        self.output_dir = Path(self.config.output.current_dir)
 
     @abstractmethod
     def execute(self, context: TaskContext, tracker: ProgressTracker) -> ExecutionStatus:
@@ -452,22 +455,44 @@ class RalphExecutor(ExecutorStrategy):
         )
         print(header)
 
-        # Gemini 独立审查 Codex 的实现
+        # 查询知识库获取需求文档（如果配置了）
+        knowledge_context = ""
+        if context.notebook_id and self.config.knowledge.auto_query:
+            tracker.update(0.72, "查询知识库获取需求文档...")
+            kb_query = self.dispatcher.format_knowledge_query_prompt(
+                task_description=context.description,
+                phase_name="独立审查"
+            )
+            kb_result = self.dispatcher.query_knowledge_base(
+                notebook_id=context.notebook_id,
+                query=kb_query
+            )
+            if kb_result and isinstance(kb_result, str):
+                knowledge_context = f"""
+## 需求文档（来自知识库）
+{kb_result}
+
+---
+"""
+                print("  📚 已获取知识库需求文档")
+
+        # Gemini 独立审查 Codex 的实现（注入知识库需求）
         review_prompt = f"""审查以下代码实现:
 
 任务描述: {context.description}
-
+{knowledge_context}
 实现结果:
 {impl_result.output[:5000]}  # 限制长度
 
 审查重点:
-1. 需求是否完全覆盖
+1. 需求是否完全覆盖（对比知识库中的需求文档）
 2. 代码质量和最佳实践
 3. 潜在 Bug 和安全问题
 4. 改进建议
 
 输出格式:
 - 问题列表（严重性 + 文件:行号 + 具体问题）
+- 需求覆盖度检查（如有知识库需求）
 - 改进建议"""
 
         review_result = self.dispatcher.call_gemini(
@@ -722,18 +747,40 @@ class ArchitectExecutor(ExecutorStrategy):
         )
         print(header)
 
+        # 查询知识库获取需求文档（如果配置了）
+        knowledge_context = ""
+        if context.notebook_id and self.config.knowledge.auto_query:
+            tracker.update(0.77, "查询知识库获取需求文档...")
+            kb_query = self.dispatcher.format_knowledge_query_prompt(
+                task_description=context.description,
+                phase_name="架构审查"
+            )
+            kb_result = self.dispatcher.query_knowledge_base(
+                notebook_id=context.notebook_id,
+                query=kb_query
+            )
+            if kb_result and isinstance(kb_result, str):
+                knowledge_context = f"""
+## 需求文档（来自知识库）
+{kb_result}
+
+---
+"""
+                print("  📚 已获取知识库需求文档")
+
         review_prompt = f"""审查以下架构实现:
 
 原始任务: {context.description}
-
+{knowledge_context}
 实现结果:
 {impl_result.output[:5000]}
 
 审查重点:
-1. 架构设计是否正确实现
+1. 架构设计是否正确实现（对比知识库需求）
 2. 代码质量和最佳实践
 3. 潜在问题和风险
-4. 改进建议"""
+4. 需求覆盖度检查
+5. 改进建议"""
 
         review_result = self.dispatcher.call_gemini(
             prompt=review_prompt,
@@ -1000,6 +1047,7 @@ class TaskExecutor:
     def __init__(self, config: Optional[SkillpackConfig] = None, quiet: bool = False):
         self.config = config or SkillpackConfig()
         self.quiet = quiet
+        self._usage_store = UsageStore()
         self._strategies = {
             ExecutionRoute.DIRECT: DirectExecutor(self.config),
             ExecutionRoute.PLANNED: PlannedExecutor(self.config),
@@ -1010,6 +1058,9 @@ class TaskExecutor:
 
     def execute(self, context: TaskContext) -> ExecutionStatus:
         """执行任务"""
+        # 生成任务 ID
+        task_id = f"task-{uuid.uuid4().hex[:8]}"
+
         # 创建输出目录
         working_dir = context.working_dir or Path.cwd()
         current_dir = working_dir / self.config.output.current_dir
@@ -1020,7 +1071,7 @@ class TaskExecutor:
 
         # 创建进度追踪器
         tracker = SimpleProgressTracker(
-            task_id="task",
+            task_id=task_id,
             description=context.description,
             quiet=self.quiet
         )
@@ -1030,7 +1081,7 @@ class TaskExecutor:
         if not self.quiet:
             print(f"""
 ════════════════════════════════════════════════════════════
-🚀 Skillpack v5.4.0 - 任务开始
+🚀 Skillpack v5.4.1 - 任务开始
 ════════════════════════════════════════════════════════════
 📋 任务: {context.description}
 📊 路由: {context.route.value}
@@ -1041,5 +1092,34 @@ class TaskExecutor:
         # 获取执行策略
         strategy = self._strategies.get(context.route, DirectExecutor(self.config))
 
+        # 设置调度器上下文（用于用量追踪）
+        strategy.dispatcher.set_context(
+            task_id=task_id,
+            route=context.route.value
+        )
+
         # 执行
         return strategy.execute(context, tracker)
+
+    def record_claude_phase(
+        self,
+        task_id: str,
+        route: str,
+        phase: int,
+        phase_name: str,
+        duration_ms: int = 0,
+        success: bool = True
+    ):
+        """记录 Claude 执行的阶段"""
+        record = UsageRecord(
+            timestamp=datetime.now().isoformat(),
+            model="claude",
+            route=route,
+            phase=phase,
+            phase_name=phase_name,
+            task_id=task_id,
+            success=success,
+            duration_ms=duration_ms,
+            mode="direct"
+        )
+        self._usage_store.append_record(record)

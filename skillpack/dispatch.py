@@ -5,9 +5,11 @@
 v5.4.0: CLI 优先模式，真实调用外部模型。
 """
 
+import os
 import subprocess
 import shlex
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
@@ -15,6 +17,7 @@ import json
 import time
 
 from .models import SkillpackConfig
+from .usage import UsageStore, UsageRecord
 
 
 class ModelType(Enum):
@@ -53,6 +56,43 @@ class ModelDispatcher:
         self.config = config
         self.use_cli = config.cli.prefer_cli_over_mcp
         self._execution_log: List[dict] = []
+        self._mock_mode = self._detect_mock_mode()
+        # 用量追踪
+        self._usage_store = UsageStore()
+        self._current_task_id: Optional[str] = None
+        self._current_route: Optional[str] = None
+        self._current_phase: int = 0
+        self._current_phase_name: str = ""
+
+    def set_context(
+        self,
+        task_id: str,
+        route: str,
+        phase: int = 0,
+        phase_name: str = ""
+    ):
+        """设置当前任务上下文（在执行器中调用）"""
+        self._current_task_id = task_id
+        self._current_route = route
+        self._current_phase = phase
+        self._current_phase_name = phase_name
+
+    def _detect_mock_mode(self) -> bool:
+        """检测是否启用 mock 模式（测试环境避免真实调用外部 CLI）"""
+        return bool(os.environ.get("SKILLPACK_MOCK_MODE") or os.environ.get("PYTEST_CURRENT_TEST"))
+
+    def _mock_result(self, model: ModelType, prompt: str) -> DispatchResult:
+        """生成 mock 调用结果"""
+        preview = (prompt or "").strip().replace("\n", " ")[:200]
+        output = f"[mock {model.value} output] {preview}"
+        return DispatchResult(
+            success=True,
+            output=output,
+            model=model,
+            mode=ExecutionMode.CLI,
+            duration_ms=0,
+            command="mock"
+        )
 
     def get_execution_mode(self) -> ExecutionMode:
         """获取当前执行模式"""
@@ -75,6 +115,8 @@ class ModelDispatcher:
         Returns:
             DispatchResult 包含执行结果
         """
+        if self._mock_mode:
+            return self._mock_result(ModelType.CODEX, prompt)
         if self.use_cli:
             return self._call_codex_cli(prompt, context_files, sandbox)
         else:
@@ -97,10 +139,75 @@ class ModelDispatcher:
         Returns:
             DispatchResult 包含执行结果
         """
+        if self._mock_mode:
+            return self._mock_result(ModelType.GEMINI, prompt)
         if self.use_cli:
             return self._call_gemini_cli(prompt, context_files, sandbox)
         else:
             return self._call_gemini_mcp(prompt, context_files, sandbox)
+
+    def query_knowledge_base(
+        self,
+        notebook_id: str,
+        query: str
+    ) -> Optional[str]:
+        """
+        查询 NotebookLM 知识库。
+
+        Args:
+            notebook_id: NotebookLM 笔记本 ID
+            query: 查询内容
+
+        Returns:
+            查询结果文本，失败返回 None
+        """
+        if self._mock_mode:
+            return f"[mock knowledge base response] Query: {query[:100]}"
+
+        if not notebook_id:
+            return None
+
+        start_time = time.time()
+
+        try:
+            # 使用 MCP 工具查询 NotebookLM
+            # 注意：这里返回 MCP 调用参数，由调用方实际执行
+            # 因为 MCP 调用需要在 Claude 上下文中完成
+            return {
+                "tool": "mcp__notebooklm-mcp__notebook_query",
+                "params": {
+                    "notebook_id": notebook_id,
+                    "query": query
+                }
+            }
+        except Exception as e:
+            return None
+
+    def format_knowledge_query_prompt(
+        self,
+        task_description: str,
+        phase_name: str
+    ) -> str:
+        """
+        生成知识库查询 prompt。
+
+        Args:
+            task_description: 任务描述
+            phase_name: 当前阶段名称
+
+        Returns:
+            格式化的查询 prompt
+        """
+        return f"""查询与以下任务相关的需求文档和验收标准：
+
+任务描述: {task_description}
+当前阶段: {phase_name}
+
+请返回：
+1. 相关的功能需求
+2. 验收标准和测试用例
+3. 技术约束和注意事项
+4. 相关的设计决策"""
 
     def _call_codex_cli(
         self,
@@ -414,17 +521,36 @@ class ModelDispatcher:
         mode: ExecutionMode,
         success: bool,
         duration_ms: int,
-        command: str
+        command: str,
+        error: Optional[str] = None
     ):
-        """记录执行日志"""
+        """记录执行日志（内存 + 持久化）"""
+        timestamp = datetime.now().isoformat()
+
+        # 内存日志
         self._execution_log.append({
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "timestamp": timestamp,
             "model": model.value,
             "mode": mode.value,
             "success": success,
             "duration_ms": duration_ms,
             "command": command
         })
+
+        # 持久化记录
+        record = UsageRecord(
+            timestamp=timestamp,
+            model=model.value,
+            route=self._current_route or "UNKNOWN",
+            phase=self._current_phase,
+            phase_name=self._current_phase_name,
+            task_id=self._current_task_id,
+            success=success,
+            duration_ms=duration_ms,
+            error=error,
+            mode=mode.value
+        )
+        self._usage_store.append_record(record)
 
     def get_execution_log(self) -> List[dict]:
         """获取执行日志"""
