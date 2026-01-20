@@ -2,17 +2,19 @@
 模型调度器
 
 负责根据配置决定使用 CLI 或 MCP 调用 Codex/Gemini。
-v5.4.0: CLI 优先模式，真实调用外部模型。
+v5.4.1: CLI 优先模式，增强状态追踪和错误传递。
 """
 
 import os
 import subprocess
 import shlex
-from dataclasses import dataclass
+import re
+import threading
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Callable, Dict, Any
 import json
 import time
 
@@ -33,6 +35,16 @@ class ExecutionMode(Enum):
     MCP = "mcp"
 
 
+class TaskStatus(Enum):
+    """任务状态 (v5.4.1)"""
+    PENDING = "pending"      # 等待执行
+    RUNNING = "running"      # 执行中
+    COMPLETED = "completed"  # 成功完成
+    FAILED = "failed"        # 执行失败
+    TIMEOUT = "timeout"      # 超时
+    CANCELLED = "cancelled"  # 已取消
+
+
 @dataclass
 class DispatchResult:
     """调度结果"""
@@ -43,13 +55,92 @@ class DispatchResult:
     mode: Optional[ExecutionMode] = None
     duration_ms: int = 0
     command: Optional[str] = None  # 实际执行的命令
+    status: TaskStatus = TaskStatus.COMPLETED  # 任务状态 (v5.4.1)
+    error_type: Optional[str] = None  # 错误类型分类 (v5.4.1)
+    error_suggestion: Optional[str] = None  # 修复建议 (v5.4.1)
+
+
+# 常见错误模式和修复建议 (v5.4.1)
+ERROR_PATTERNS: Dict[str, Dict[str, str]] = {
+    r"operation not permitted": {
+        "type": "PERMISSION_ERROR",
+        "suggestion": "权限不足。尝试: sudo chown -R $(whoami) <path> 或使用 GOCACHE=/tmp/go-build"
+    },
+    r"permission denied": {
+        "type": "PERMISSION_ERROR",
+        "suggestion": "权限被拒绝。检查文件/目录权限或使用 sudo"
+    },
+    r"command not found|not found in PATH": {
+        "type": "COMMAND_NOT_FOUND",
+        "suggestion": "命令未找到。确保已安装并添加到 PATH"
+    },
+    r"connection refused|network unreachable": {
+        "type": "NETWORK_ERROR",
+        "suggestion": "网络连接失败。检查网络或代理设置"
+    },
+    r"out of memory|cannot allocate": {
+        "type": "RESOURCE_ERROR",
+        "suggestion": "内存不足。关闭其他程序或增加可用内存"
+    },
+    r"disk.*(full|space)|no space left": {
+        "type": "DISK_ERROR",
+        "suggestion": "磁盘空间不足。清理磁盘空间"
+    },
+    r"rate limit|too many requests": {
+        "type": "RATE_LIMIT",
+        "suggestion": "API 限流。稍后重试或检查配额"
+    },
+    r"authentication|unauthorized|invalid.*token": {
+        "type": "AUTH_ERROR",
+        "suggestion": "认证失败。检查 API Key 或重新登录"
+    },
+    r"timeout|timed out": {
+        "type": "TIMEOUT_ERROR",
+        "suggestion": "操作超时。增加超时时间或拆分任务"
+    },
+}
+
+
+def parse_error(error_text: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    解析错误文本，返回 (错误类型, 修复建议)。
+
+    v5.4.1: 智能错误分类和建议。
+    """
+    if not error_text:
+        return None, None
+
+    error_lower = error_text.lower()
+    for pattern, info in ERROR_PATTERNS.items():
+        if re.search(pattern, error_lower, re.IGNORECASE):
+            return info["type"], info["suggestion"]
+
+    return "UNKNOWN_ERROR", None
+
+
+def format_error_message(
+    error: str,
+    error_type: Optional[str] = None,
+    suggestion: Optional[str] = None
+) -> str:
+    """
+    格式化错误消息，包含类型和建议。
+
+    v5.4.1: 用户友好的错误输出。
+    """
+    lines = [f"❌ 错误: {error}"]
+    if error_type:
+        lines.append(f"   类型: {error_type}")
+    if suggestion:
+        lines.append(f"   💡 建议: {suggestion}")
+    return "\n".join(lines)
 
 
 class ModelDispatcher:
     """
     模型调度器 - 根据配置决定使用 CLI 或 MCP 调用模型。
 
-    v5.3+: CLI 优先模式，禁止 MCP 调用。
+    v5.4.1: CLI 优先模式，增强状态追踪和错误传递。
     """
 
     def __init__(self, config: SkillpackConfig):
@@ -63,6 +154,22 @@ class ModelDispatcher:
         self._current_route: Optional[str] = None
         self._current_phase: int = 0
         self._current_phase_name: str = ""
+        # 进度回调 (v5.4.1)
+        self._progress_callback: Optional[Callable[[str, float], None]] = None
+
+    def set_progress_callback(self, callback: Callable[[str, float], None]):
+        """设置进度回调函数 (v5.4.1)"""
+        self._progress_callback = callback
+
+    def _report_progress(self, message: str, progress: float = -1):
+        """报告进度 (v5.4.1)"""
+        if self._progress_callback:
+            self._progress_callback(message, progress)
+        # 同时打印到控制台
+        if progress >= 0:
+            print(f"  ⏳ {message} ({progress*100:.0f}%)")
+        else:
+            print(f"  ⏳ {message}")
 
     def set_context(
         self,
@@ -220,8 +327,10 @@ class ModelDispatcher:
         通过 CLI 调用 Codex。
 
         命令格式: codex exec "<prompt>" --full-auto
+        v5.4.1: 增强错误解析和状态追踪。
         """
         start_time = time.time()
+        self._report_progress("启动 Codex CLI...")
 
         # 构建完整 prompt（包含文件上下文）
         full_prompt = self._build_prompt_with_context(prompt, context_files)
@@ -248,6 +357,7 @@ class ModelDispatcher:
         command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" --full-auto"
 
         try:
+            self._report_progress("Codex 执行中...", 0.3)
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -267,35 +377,58 @@ class ModelDispatcher:
             )
 
             if result.returncode == 0:
+                self._report_progress("Codex 完成", 1.0)
                 return DispatchResult(
                     success=True,
                     output=result.stdout,
                     model=ModelType.CODEX,
                     mode=ExecutionMode.CLI,
                     duration_ms=duration_ms,
-                    command=command_str
+                    command=command_str,
+                    status=TaskStatus.COMPLETED
                 )
             else:
+                # 解析错误 (v5.4.1)
+                error_text = result.stderr or f"Exit code: {result.returncode}"
+                error_type, suggestion = parse_error(error_text)
+
+                # 合并 stdout 和 stderr 以捕获完整错误
+                full_error = error_text
+                if result.stdout and "error" in result.stdout.lower():
+                    full_error = f"{result.stdout}\n{error_text}"
+                    error_type, suggestion = parse_error(full_error)
+
                 return DispatchResult(
                     success=False,
                     output=result.stdout,
-                    error=result.stderr or f"Exit code: {result.returncode}",
+                    error=error_text,
                     model=ModelType.CODEX,
                     mode=ExecutionMode.CLI,
                     duration_ms=duration_ms,
-                    command=command_str
+                    command=command_str,
+                    status=TaskStatus.FAILED,
+                    error_type=error_type,
+                    error_suggestion=suggestion
                 )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             duration_ms = int((time.time() - start_time) * 1000)
+            # 尝试获取部分输出 (v5.4.1)
+            partial_output = ""
+            if hasattr(e, 'stdout') and e.stdout:
+                partial_output = e.stdout if isinstance(e.stdout, str) else e.stdout.decode('utf-8', errors='ignore')
+
             return DispatchResult(
                 success=False,
-                output="",
+                output=partial_output,
                 error=f"Codex CLI 超时 ({self.config.cli.cli_timeout_seconds}s)",
                 model=ModelType.CODEX,
                 mode=ExecutionMode.CLI,
                 duration_ms=duration_ms,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.TIMEOUT,
+                error_type="TIMEOUT_ERROR",
+                error_suggestion="增加 cli.cli_timeout_seconds 配置或拆分任务为更小的子任务"
             )
         except FileNotFoundError:
             return DispatchResult(
@@ -304,16 +437,23 @@ class ModelDispatcher:
                 error=f"Codex CLI 未找到: {self.config.cli.codex_command}",
                 model=ModelType.CODEX,
                 mode=ExecutionMode.CLI,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.FAILED,
+                error_type="COMMAND_NOT_FOUND",
+                error_suggestion="安装 Codex CLI: npm install -g @openai/codex"
             )
         except Exception as e:
+            error_type, suggestion = parse_error(str(e))
             return DispatchResult(
                 success=False,
                 output="",
                 error=f"Codex CLI 执行失败: {str(e)}",
                 model=ModelType.CODEX,
                 mode=ExecutionMode.CLI,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.FAILED,
+                error_type=error_type,
+                error_suggestion=suggestion
             )
 
     def _call_gemini_cli(
@@ -326,8 +466,10 @@ class ModelDispatcher:
         通过 CLI 调用 Gemini。
 
         命令格式: gemini "<prompt>" -s --yolo
+        v5.4.1: 增强错误解析和状态追踪。
         """
         start_time = time.time()
+        self._report_progress("启动 Gemini CLI...")
 
         # Gemini 使用 @ 语法注入文件上下文
         full_prompt = self._build_gemini_prompt(prompt, context_files)
@@ -344,6 +486,7 @@ class ModelDispatcher:
         command_str = f"{self.config.cli.gemini_command} \"<prompt>\" -s --yolo"
 
         try:
+            self._report_progress("Gemini 执行中...", 0.3)
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -363,35 +506,58 @@ class ModelDispatcher:
             )
 
             if result.returncode == 0:
+                self._report_progress("Gemini 完成", 1.0)
                 return DispatchResult(
                     success=True,
                     output=result.stdout,
                     model=ModelType.GEMINI,
                     mode=ExecutionMode.CLI,
                     duration_ms=duration_ms,
-                    command=command_str
+                    command=command_str,
+                    status=TaskStatus.COMPLETED
                 )
             else:
+                # 解析错误 (v5.4.1)
+                error_text = result.stderr or f"Exit code: {result.returncode}"
+                error_type, suggestion = parse_error(error_text)
+
+                # 合并 stdout 和 stderr 以捕获完整错误
+                full_error = error_text
+                if result.stdout and "error" in result.stdout.lower():
+                    full_error = f"{result.stdout}\n{error_text}"
+                    error_type, suggestion = parse_error(full_error)
+
                 return DispatchResult(
                     success=False,
                     output=result.stdout,
-                    error=result.stderr or f"Exit code: {result.returncode}",
+                    error=error_text,
                     model=ModelType.GEMINI,
                     mode=ExecutionMode.CLI,
                     duration_ms=duration_ms,
-                    command=command_str
+                    command=command_str,
+                    status=TaskStatus.FAILED,
+                    error_type=error_type,
+                    error_suggestion=suggestion
                 )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             duration_ms = int((time.time() - start_time) * 1000)
+            # 尝试获取部分输出 (v5.4.1)
+            partial_output = ""
+            if hasattr(e, 'stdout') and e.stdout:
+                partial_output = e.stdout if isinstance(e.stdout, str) else e.stdout.decode('utf-8', errors='ignore')
+
             return DispatchResult(
                 success=False,
-                output="",
+                output=partial_output,
                 error=f"Gemini CLI 超时 ({self.config.cli.cli_timeout_seconds}s)",
                 model=ModelType.GEMINI,
                 mode=ExecutionMode.CLI,
                 duration_ms=duration_ms,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.TIMEOUT,
+                error_type="TIMEOUT_ERROR",
+                error_suggestion="增加 cli.cli_timeout_seconds 配置或拆分任务为更小的子任务"
             )
         except FileNotFoundError:
             return DispatchResult(
@@ -400,16 +566,23 @@ class ModelDispatcher:
                 error=f"Gemini CLI 未找到: {self.config.cli.gemini_command}",
                 model=ModelType.GEMINI,
                 mode=ExecutionMode.CLI,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.FAILED,
+                error_type="COMMAND_NOT_FOUND",
+                error_suggestion="安装 Gemini CLI: npm install -g @google/gemini-cli"
             )
         except Exception as e:
+            error_type, suggestion = parse_error(str(e))
             return DispatchResult(
                 success=False,
                 output="",
                 error=f"Gemini CLI 执行失败: {str(e)}",
                 model=ModelType.GEMINI,
                 mode=ExecutionMode.CLI,
-                command=command_str
+                command=command_str,
+                status=TaskStatus.FAILED,
+                error_type=error_type,
+                error_suggestion=suggestion
             )
 
     def _call_codex_mcp(
