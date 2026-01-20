@@ -35,9 +35,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/VictorVVedtion/openalpha"
-Documentation = "https://github.com/VictorVVedtion/openalpha#readme"
-Repository = "https://github.com/VictorVVedtion/openalpha.git"
+Homepage = "https://github.com/VictorVVedition/openalpha"
+Documentation = "https://github.com/VictorVVedition/openalpha#readme"
+Repository = "https://github.com/VictorVVedition/openalpha.git"
 
 [tool.ruff]
 target-version = "py39"

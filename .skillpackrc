@@ -43,6 +43,8 @@
   "cli": {
     "prefer_cli_over_mcp": true,
     "cli_timeout_seconds": 600,
+    "codex_command": "codex",
+    "gemini_command": "gemini",
     "auto_context": true,
     "max_context_files": 15,
     "max_lines_per_file": 800

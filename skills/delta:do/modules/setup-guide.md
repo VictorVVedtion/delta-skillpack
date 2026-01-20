@@ -86,7 +86,7 @@ codex exec "print hello world"
 
 ```bash
 # 全局安装 Gemini CLI
-npm install -g @anthropic-ai/gemini-cli
+npm install -g @google/gemini-cli
 
 # 或使用 npx 直接运行（无需全局安装）
 npx gemini-mcp-tool
