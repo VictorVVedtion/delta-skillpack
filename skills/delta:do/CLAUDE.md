@@ -1,8 +1,59 @@
-# /do Skill - 执行指令 v5.3.0
+# /do Skill - 执行指令 v5.4.0
 
 当用户调用 `/do <任务>` 时，按以下流程执行：
 
 ---
+
+## ⚠️ 铁律 - 必须遵循（最高优先级）
+
+### 1. 执行模式检测
+
+每个 mandatory 阶段开始前，**必须**：
+1. 读取 `.skillpackrc` 中的 `cli.prefer_cli_over_mcp`
+2. 如果 `true` → 使用 **Bash 调用 CLI**
+3. 如果 `false` → 使用 **MCP 工具**
+
+### 2. CLI 调用命令（当 `prefer_cli_over_mcp: true`）
+
+| 模型 | CLI 命令 |
+|------|----------|
+| **Codex** | `codex exec "<prompt>" --full-auto` |
+| **Gemini** | `gemini "<prompt>" -s --yolo` |
+
+### 3. 禁止行为
+
+| ❌ 禁止 | 说明 |
+|--------|------|
+| 当配置为 CLI 优先时使用 MCP 工具 | 违反配置约定 |
+| Claude 自己执行 Codex/Gemini 的任务 | 违反模型分工 |
+| 跳过模型调用直接完成 | 违反执行流程 |
+| 静默降级（MCP 失败后自动 Claude 接管） | 必须用户确认 |
+
+### 4. 强制调用阶段
+
+| 路由 | 阶段 | 执行模型 | 执行方式（由配置决定） |
+|------|------|----------|------------------------|
+| DIRECT_CODE | Phase 1 | Codex | CLI 或 MCP |
+| PLANNED | Phase 2-3 | Codex | CLI 或 MCP |
+| RALPH | Phase 3 | Codex | CLI 或 MCP |
+| RALPH | Phase 4 | **Gemini** | CLI 或 MCP |
+| ARCHITECT | Phase 1 | Gemini | CLI 或 MCP |
+| ARCHITECT | Phase 4 | Codex | CLI 或 MCP |
+| ARCHITECT | Phase 5 | **Gemini** | CLI 或 MCP |
+| UI_FLOW | Phase 1-2 | Gemini | CLI 或 MCP |
+
+---
+
+## v5.4 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **Grounding 机制** | 每个结论必须有 `file:line` 格式的代码证据 |
+| **独立审查者模式** | Codex 实现 → Gemini 审查（不同模型交叉审查） |
+| **保守表述原则** | 禁止绝对表述，强制不确定性声明 |
+| **交叉验证** | 多模型验证，Claude 仲裁分歧 |
+| **测试分类标准** | 基于代码行为而非文件名判断 |
+| **NotebookLM 知识锚点** | 文档作为第三验证源（可选） |
 
 ## v5.2 新特性
 
@@ -32,14 +83,18 @@
 
 1. **立即行动** - 不要只是解释，要真正执行任务
 2. **量化决策** - 使用评分系统，决策有据可循
-3. **CLI 优先** - 当 `cli.prefer_cli_over_mcp: true` 时，**完全跳过 MCP**，直接使用 CLI
-4. **MCP 强制执行** - CLI 优先关闭时，指定模型必须通过 MCP 调用
+3. **CLI 优先** - 所有 Codex/Gemini 调用使用 CLI（`codex exec --full-auto`、`gemini -s --yolo`）
+4. **禁止 MCP** - 不使用 `mcp__codex-cli__*` 或 `mcp__gemini-cli__*`
 5. **循环执行** - RALPH/ARCHITECT 使用 Stop Hook 迭代直到完成
 6. **持续追踪** - 使用 TodoWrite 追踪进度
 7. **原子检查点** - SHA-256 校验 + 多版本备份，关键节点安全保存
 8. **两阶段审查** - 规格合规 + 代码质量双保障
 9. **结构化日志** - JSONL 格式记录执行过程
 10. **异步并行** - 无依赖任务并行执行，显著提升效率 (v5.2)
+11. **Grounding 必须** - 每个分析结论必须有代码证据 (v5.4)
+12. **独立审查** - 实现者 ≠ 审查者，Codex 实现 → Gemini 审查 (v5.4)
+13. **保守表述** - 不确定时使用保守语言，禁止绝对表述 (v5.4)
+14. **交叉验证** - 关键结论需多源验证，分歧由 Claude 仲裁 (v5.4)
 
 ---
 
@@ -304,30 +359,33 @@ Phase 1 (100%): 执行
 
 ```
 Phase 1 (30%): 规划        ← Claude
-Phase 2 (60%): 实现        ← Codex (MCP)
-Phase 3 (100%): 两阶段审查 ← Codex (MCP)
+Phase 2 (60%): 实现        ← Codex (由配置决定 CLI/MCP)
+Phase 3 (100%): 两阶段审查 ← Codex (由配置决定 CLI/MCP)
 ```
 
-#### Phase 2/3: MCP 强制调用
+#### Phase 2/3: Codex 强制调用
 
 **进入 Phase 2 时必须**：
 
-1. 输出阶段提示，明确标注 `🤖 执行模型: Codex (MCP 强制调用)`
-2. 准备调用参数
-3. **立即调用** `mcp__codex-cli__codex`
+1. 检查执行模式：
+   - `cli.prefer_cli_over_mcp: true` → 使用 `codex exec "<prompt>" --full-auto`
+   - `cli.prefer_cli_over_mcp: false` → 使用 `mcp__codex-cli__codex`
+2. 输出阶段提示，明确标注执行模式
+3. **立即调用** Codex（CLI 或 MCP）
 4. **禁止** Claude 自己使用 Write/Edit 工具完成实现
 
 ---
 
-### RALPH（复杂任务自动化）- 循环
+### RALPH（复杂任务自动化）- 循环 (v5.4 更新)
 
 **适用**: 46-70 分，复杂任务
 
 ```
-Phase 1 (20%): 深度分析    ← Claude
-Phase 2 (40%): 规划        ← Claude
-Phase 3 (75%): 执行子任务  ← Codex (MCP) [循环迭代]
-Phase 4 (100%): 综合审查   ← Codex (MCP)
+Phase 1 (20%): 深度分析    ← Claude (直接执行)
+Phase 2 (40%): 规划        ← Claude (直接执行)
+Phase 3 (65%): 执行子任务  ← Codex (CLI: codex exec --full-auto) [循环迭代]
+Phase 4 (85%): 独立审查    ← Gemini (CLI: gemini -s --yolo) ← v5.4 新增！
+Phase 5 (100%): 仲裁验证   ← Claude (直接执行) ← v5.4 新增！
 ```
 
 #### 循环执行机制
@@ -346,37 +404,91 @@ Phase 4 (100%): 综合审查   ← Codex (MCP)
 
 **全部子任务完成后**，进入 Phase 4。
 
-#### Phase 3/4: MCP 强制调用
+#### Phase 3: Codex CLI 执行 (v5.4)
 
 ```
-🚨 RALPH Phase 3/4 强制执行流程：
+🚨 RALPH Phase 3 执行流程：
 
-1. 输出阶段提示，明确标注 `🤖 执行模型: Codex (MCP 强制调用)`
-2. 准备调用参数：
-   - prompt: 包含详细任务描述、相关文件路径、期望输出
-3. 立即调用 mcp__codex-cli__codex
+1. 输出阶段提示，明确标注 `🤖 执行模型: Codex (CLI)`
+2. 准备 CLI 命令：
+   codex exec "任务描述
+
+   相关文件:
+   - file1.ts
+   - file2.ts
+
+   要求:
+   1. 具体要求
+   2. ..." --full-auto
+3. 使用 Bash 工具执行
 4. 等待 Codex 返回结果
 5. 更新状态文件
 6. 验证并保存输出
 
 禁止行为：
 ❌ Claude 自己使用 Write/Edit 工具写代码
-❌ 跳过 MCP 调用直接完成任务
-❌ MCP 失败后不询问用户就自己接管
+❌ 使用 MCP 调用 (mcp__codex-cli__codex)
+❌ 跳过 CLI 调用直接完成任务
+```
+
+#### Phase 4: Gemini 独立审查 (v5.4 新增)
+
+```
+🚨 RALPH Phase 4 独立审查流程：
+
+1. 输出阶段提示，明确标注 `🤖 执行模型: Gemini (CLI) - 独立审查`
+2. （如配置 NotebookLM）查询需求文档作为参考
+3. 准备 CLI 命令：
+   gemini "@.skillpack/current/3_*.md 审查代码实现
+
+   审查重点:
+   1. 需求是否完全覆盖
+   2. 代码质量和最佳实践
+   3. 潜在 Bug 和安全问题
+
+   输出格式:
+   - 问题列表（严重性 + 文件:行号 + 具体问题）
+   - 改进建议" -s --yolo
+4. 使用 Bash 工具执行
+5. 保存审查报告
+
+独立审查的意义：
+✅ 实现者 ≠ 审查者，避免确认偏差
+✅ 不同模型视角，发现更多问题
+✅ 为 Claude 仲裁提供第二意见
+```
+
+#### Phase 5: Claude 仲裁验证 (v5.4 新增)
+
+```
+🚨 RALPH Phase 5 仲裁流程：
+
+1. 读取 Codex 实现输出 (Phase 3)
+2. 读取 Gemini 审查报告 (Phase 4)
+3. 识别分歧点
+4. 验证双方证据（使用 Grounding 格式）
+5. 做出最终决定
+6. 输出仲裁报告
+
+仲裁原则：
+- 采纳有更强代码证据支撑的结论
+- 如证据强度相当，采用保守结论
+- 必须在报告中说明仲裁理由
 ```
 
 ---
 
-### ARCHITECT（架构优先）- 循环
+### ARCHITECT（架构优先）- 循环 (v5.4 更新)
 
 **适用**: 71-100 分，超复杂任务
 
 ```
-Phase 1 (15%): 架构分析    ← Gemini (MCP)
-Phase 2 (30%): 架构设计    ← Claude
-Phase 3 (50%): 实施规划    ← Claude
-Phase 4 (80%): 分阶段实施  ← Codex (MCP) [循环迭代]
-Phase 5 (100%): 验收审查   ← Codex (MCP)
+Phase 1 (15%): 架构分析    ← Gemini (CLI: gemini -s --yolo)
+Phase 2 (25%): 架构设计    ← Claude (直接执行)
+Phase 3 (40%): 实施规划    ← Claude (直接执行)
+Phase 4 (65%): 分阶段实施  ← Codex (CLI: codex exec --full-auto) [循环迭代]
+Phase 5 (85%): 独立审查    ← Gemini (CLI: gemini -s --yolo) ← v5.4 调整！
+Phase 6 (100%): 仲裁验证   ← Claude (直接执行) ← v5.4 新增！
 ```
 
 #### Phase 1: Gemini 架构分析
@@ -384,16 +496,18 @@ Phase 5 (100%): 验收审查   ← Codex (MCP)
 ```
 🚨 ARCHITECT Phase 1 强制执行流程：
 
-1. 输出阶段提示，明确标注 `🤖 执行模型: Gemini (MCP 强制调用)`
-2. 准备调用参数：
-   - prompt: @{project_path} 分析整个项目架构...
-3. 立即调用 mcp__gemini-cli__ask-gemini
+1. 检查执行模式：
+   - cli.prefer_cli_over_mcp: true → 使用 gemini "@{project_path} 分析整个项目架构..." -s --yolo
+   - cli.prefer_cli_over_mcp: false → 使用 mcp__gemini-cli__ask-gemini
+2. 输出阶段提示，明确标注执行模式
+3. 立即调用 Gemini（CLI 或 MCP）
 4. 等待 Gemini 返回结果
 5. 保存到 1_architecture_analysis.md
 
 禁止行为：
 ❌ Claude 自己进行架构分析
 ❌ 跳过 Gemini 调用
+❌ 当配置为 CLI 优先时使用 MCP
 ```
 
 #### Phase 4/5: Codex 实施
@@ -407,8 +521,8 @@ Phase 5 (100%): 验收审查   ← Codex (MCP)
 **适用**: UI 信号，前端任务
 
 ```
-Phase 1 (30%): UI设计   ← Gemini (MCP)
-Phase 2 (60%): 实现     ← Gemini (MCP)
+Phase 1 (30%): UI设计   ← Gemini (由配置决定 CLI/MCP)
+Phase 2 (60%): 实现     ← Gemini (由配置决定 CLI/MCP)
 Phase 3 (100%): 预览    ← Claude
 ```
 
@@ -417,16 +531,18 @@ Phase 3 (100%): 预览    ← Claude
 ```
 🚨 UI_FLOW Phase 1/2 强制执行流程：
 
-1. 输出阶段提示，明确标注 `🤖 执行模型: Gemini (MCP 强制调用)`
-2. 准备调用参数：
-   - prompt: @{components_path} 设计/实现 UI...
-3. 立即调用 mcp__gemini-cli__ask-gemini
+1. 检查执行模式：
+   - cli.prefer_cli_over_mcp: true → 使用 gemini "@{components_path} 设计/实现 UI..." -s --yolo
+   - cli.prefer_cli_over_mcp: false → 使用 mcp__gemini-cli__ask-gemini
+2. 输出阶段提示，明确标注执行模式
+3. 立即调用 Gemini（CLI 或 MCP）
 4. 等待 Gemini 返回结果
 5. 保存输出
 
 禁止行为：
 ❌ Claude 自己实现 UI 代码
 ❌ 跳过 Gemini 调用
+❌ 当配置为 CLI 优先时使用 MCP
 ```
 
 ---
@@ -928,8 +1044,11 @@ retry_policy:
 | `modules/routing.md` | 路由决策矩阵 | v1.0 |
 | `modules/checkpoint.md` | 原子检查点与恢复机制 | **v3.0** |
 | `modules/recovery.md` | 错误处理与恢复策略 | **v2.2** |
-| `modules/review.md` | 两阶段审查系统 | v1.0 |
-| `modules/mcp-dispatch.md` | MCP 强制调用与并行调度 | **v5.2.1** |
+| `modules/review.md` | 两阶段审查 + 保守表述 | **v2.0** |
+| `modules/mcp-dispatch.md` | CLI 调度与独立审查 | **v5.4.0** |
 | `modules/loop-engine.md` | 循环执行引擎 | **v5.2** |
-| `modules/config-schema.md` | 配置验证规范 | **v5.0** |
+| `modules/config-schema.md` | 配置验证规范 | **v5.4** |
 | `modules/logging.md` | 结构化日志系统 | v1.0 |
+| `modules/grounding.md` | Grounding 机制 | **v1.0** |
+| `modules/test-classification.md` | 测试分类标准 | **v1.0** |
+| `modules/cross-validation.md` | 交叉验证机制 | **v1.0** |

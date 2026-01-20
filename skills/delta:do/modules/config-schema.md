@@ -8,7 +8,17 @@
 
 ## Schema 版本
 
-当前版本: **5.0**
+当前版本: **5.4**
+
+### v5.4 变更
+
+| 变更 | 说明 |
+|------|------|
+| 扩展 `knowledge` 配置块 | 新增 `auto_sync`, `query_before_review`, `grounding_weight` |
+| 新增 `cross_validation` 配置块 | 交叉验证相关配置 |
+| 新增 `cross_validation.enabled` | 是否启用交叉验证（默认 true） |
+| 新增 `cross_validation.require_arbitration_on_disagreement` | 分歧时是否仲裁 |
+| 新增 `cross_validation.min_confidence_for_auto_pass` | 自动通过的最小置信度 |
 
 ### v5.0 变更
 
@@ -46,8 +56,8 @@
   "properties": {
     "version": {
       "type": "string",
-      "enum": ["5.0"],
-      "default": "5.0",
+      "enum": ["5.4"],
+      "default": "5.4",
       "description": "配置 Schema 版本"
     },
     "knowledge": {
@@ -67,6 +77,52 @@
           "type": "boolean",
           "default": true,
           "description": "启动时是否自动查询知识库"
+        },
+        "auto_sync": {
+          "type": "boolean",
+          "default": false,
+          "description": "任务完成后是否自动同步到知识库 (v5.4)"
+        },
+        "query_before_review": {
+          "type": "boolean",
+          "default": true,
+          "description": "审查阶段前是否查询需求文档 (v5.4)"
+        },
+        "grounding_weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.3,
+          "description": "NotebookLM 证据在 Grounding 中的权重 (v5.4)"
+        }
+      }
+    },
+    "cross_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "交叉验证配置 (v5.4 新增)",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用交叉验证"
+        },
+        "require_arbitration_on_disagreement": {
+          "type": "boolean",
+          "default": true,
+          "description": "Codex 和 Gemini 分歧时是否要求 Claude 仲裁"
+        },
+        "min_confidence_for_auto_pass": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "default": "high",
+          "description": "自动通过审查的最小置信度"
+        },
+        "auto_query_notebook_before_review": {
+          "type": "boolean",
+          "default": true,
+          "description": "审查前是否自动查询 NotebookLM 获取需求"
         }
       }
     },
@@ -218,8 +274,9 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `version` | string | `"5.0"` | Schema 版本 |
-| `knowledge` | object | `{}` | 知识库相关配置 |
+| `version` | string | `"5.4"` | Schema 版本 |
+| `knowledge` | object | `{}` | 知识库相关配置 (v5.4 扩展) |
+| `cross_validation` | object | `{}` | 交叉验证配置 (v5.4 新增) |
 | `routing` | object | `{}` | 路由评分与阈值 |
 | `checkpoint` | object | `{}` | 检查点保存配置 |
 | `logging` | object | `{}` | 日志输出配置 |
@@ -236,6 +293,18 @@
 |------|------|--------|------|
 | `knowledge.default_notebook` | string \| null | `null` | 默认 NotebookLM ID (UUID v4) |
 | `knowledge.auto_query` | boolean | `true` | 启动时自动查询知识库 |
+| `knowledge.auto_sync` | boolean | `false` | 任务完成后自动同步到知识库 (v5.4) |
+| `knowledge.query_before_review` | boolean | `true` | 审查阶段前查询需求文档 (v5.4) |
+| `knowledge.grounding_weight` | number | `0.3` | NotebookLM 证据权重 0-1 (v5.4) |
+
+### cross_validation (v5.4 新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `cross_validation.enabled` | boolean | `true` | 是否启用交叉验证 |
+| `cross_validation.require_arbitration_on_disagreement` | boolean | `true` | 分歧时要求 Claude 仲裁 |
+| `cross_validation.min_confidence_for_auto_pass` | string | `"high"` | 自动通过的最小置信度 |
+| `cross_validation.auto_query_notebook_before_review` | boolean | `true` | 审查前自动查询 NotebookLM |
 
 ### routing.weights
 
@@ -384,6 +453,48 @@ Schema: 4.0
 修复: {suggestion}
 ────────────────────────────────────────────────────────────
 ```
+
+---
+
+## 迁移指南 (v5.0 → v5.4)
+
+1. **版本升级**: 将 `version` 改为 `"5.4"`。
+2. **新增 cross_validation 配置块**: 添加 `cross_validation` 配置块（默认启用）。
+3. **扩展 knowledge 配置**: 可选添加 `auto_sync`, `query_before_review`, `grounding_weight`。
+
+### 最小迁移示例
+
+```json
+{
+  "version": "5.4"
+}
+```
+
+### 完整配置示例
+
+```json
+{
+  "version": "5.4",
+  "knowledge": {
+    "default_notebook": "your-notebook-uuid",
+    "auto_query": true,
+    "auto_sync": false,
+    "query_before_review": true,
+    "grounding_weight": 0.3
+  },
+  "cross_validation": {
+    "enabled": true,
+    "require_arbitration_on_disagreement": true,
+    "min_confidence_for_auto_pass": "high",
+    "auto_query_notebook_before_review": true
+  },
+  "cli": {
+    "prefer_cli_over_mcp": true
+  }
+}
+```
+
+迁移完成后运行 Schema 校验，确保无错误提示。
 
 ---
 

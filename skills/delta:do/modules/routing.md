@@ -10,10 +10,11 @@
 
 | 路由 | 复杂度分数 | 阶段数 | 核心原则 | 适用场景 |
 |------|-----------|--------|----------|----------|
-| **DIRECT** | 0-20 | 1 | 立即行动 | 简单修改、快速修复 |
+| **DIRECT_TEXT** | 0-20 (文本) | 1 | 立即行动 | 文档、注释、配置 |
+| **DIRECT_CODE** | 0-20 (代码) | 1 | 立即行动 | 简单代码修复 |
 | **PLANNED** | 21-45 | 3 | 计划先行 | 新功能、常规开发 |
-| **RALPH** | 46-70 | 4 | 分而治之 | 多模块、系统功能 |
-| **ARCHITECT** | 71-100 | 5 | 架构优先 | 系统设计、重大重构 |
+| **RALPH** | 46-70 | 5 | 分而治之 | 多模块、系统功能 |
+| **ARCHITECT** | 71-100 | 6 | 架构优先 | 系统设计、重大重构 |
 | **UI_FLOW** | UI 信号 | 3 | 用户至上 | UI/UX 相关任务 |
 
 ---
@@ -55,20 +56,37 @@
 
 ## 路由详情
 
-### DIRECT (直接执行)
+### DIRECT_TEXT (文本直接执行) - Claude
 
-**复杂度**: 0-20 分
+**复杂度**: 0-20 分 (文本任务)
 **阶段**: 1 个
 
 ```
 Phase 1: 执行 (100%)
-  └── 直接完成任务，输出简短摘要
+  └── Claude 直接完成任务，输出简短摘要
 ```
 
 **特征**:
 - 无需规划，立即行动
-- 简洁高效
-- 适合快速修复
+- 适合文档、注释、配置修改
+
+**输出文件**: `.skillpack/current/output.txt`
+
+---
+
+### DIRECT_CODE (代码直接执行) - Codex
+
+**复杂度**: 0-20 分 (代码任务)
+**阶段**: 1 个
+
+```
+Phase 1: 执行 (100%)
+  └── Codex (CLI) 直接完成代码任务
+```
+
+**特征**:
+- 无需规划，立即行动
+- 适合简单代码修复、函数添加
 
 **输出文件**: `.skillpack/current/output.txt`
 
@@ -101,29 +119,33 @@ Phase 3: 审查 (100%)
 
 ---
 
-### RALPH (复杂任务自动化)
+### RALPH (复杂任务自动化) - Claude + Codex + Gemini
 
 **复杂度**: 46-70 分
-**阶段**: 4 个
+**阶段**: 5 个
 
 ```
-Phase 1: 分析 (20%)
-  ├── 任务分解
+Phase 1: 深度分析 (20%)
+  ├── 任务分解 - Claude
   ├── 依赖关系识别
   └── 风险评估
 
-Phase 2: 规划 (40%)
-  ├── 子任务详细规划
+Phase 2: 规划 (35%)
+  ├── 子任务详细规划 - Claude
   └── 执行顺序确定
 
-Phase 3: 执行 (75%)
-  ├── 按依赖顺序执行
+Phase 3: 执行 (60%)
+  ├── 按依赖顺序执行 - Codex (CLI)
   ├── 支持并行子任务
   └── 保存检查点
 
-Phase 4: 审查 (100%)
-  ├── 综合集成验证
-  └── 完整性检查
+Phase 4: 独立审查 (85%)
+  ├── 跨模型审查 - Gemini (CLI)
+  └── 需求覆盖验证
+
+Phase 5: 仲裁验证 (100%)
+  ├── 分歧处理 - Claude
+  └── 最终确认
 ```
 
 **输出文件**:
@@ -131,39 +153,43 @@ Phase 4: 审查 (100%)
 - `.skillpack/current/2_plan.md`
 - `.skillpack/current/3_subtask_*.md`
 - `.skillpack/current/4_review.md`
+- `.skillpack/current/5_arbitration.md`
 
 ---
 
-### ARCHITECT (架构优先) - 新增
+### ARCHITECT (架构优先) - Gemini + Claude + Codex
 
 **复杂度**: 71-100 分
-**阶段**: 5 个
+**阶段**: 6 个
 
 ```
 Phase 1: 架构分析 (15%)
-  ├── 系统全局分析
+  ├── 系统全局分析 - Gemini (CLI)
   ├── 现有架构评估
   └── 约束条件识别
 
-Phase 2: 架构设计 (30%)
-  ├── 目标架构设计
+Phase 2: 架构设计 (25%)
+  ├── 目标架构设计 - Claude
   ├── 技术选型
   └── 接口定义
 
-Phase 3: 实施规划 (50%)
-  ├── 详细任务分解
+Phase 3: 实施规划 (40%)
+  ├── 详细任务分解 - Claude
   ├── 迁移策略
   └── 回滚方案
 
-Phase 4: 分阶段实施 (80%)
-  ├── 按阶段执行
-  ├── 持续集成验证
+Phase 4: 分阶段实施 (65%)
+  ├── 按阶段执行 - Codex (CLI)
+  ├── 支持并行执行
   └── 检查点保存
 
-Phase 5: 验收审查 (100%)
-  ├── 架构一致性验证
-  ├── 性能基准测试
-  └── 文档更新
+Phase 5: 独立审查 (85%)
+  ├── 跨模型审查 - Gemini (CLI)
+  └── 架构一致性验证
+
+Phase 6: 仲裁验证 (100%)
+  ├── 分歧处理 - Claude
+  └── 最终确认
 ```
 
 **输出文件**:
@@ -171,7 +197,8 @@ Phase 5: 验收审查 (100%)
 - `.skillpack/current/2_architecture_design.md`
 - `.skillpack/current/3_implementation_plan.md`
 - `.skillpack/current/4_phase_*.md`
-- `.skillpack/current/5_acceptance_review.md`
+- `.skillpack/current/5_review.md`
+- `.skillpack/current/6_arbitration.md`
 
 ---
 

@@ -1,6 +1,6 @@
 # OpenAlpha
 
-智能任务执行器 v5.2.0 - 统一入口，量化决策，多模型协作，**异步并行执行**
+智能任务执行器 v5.4.0 - 统一入口，量化决策，多模型协作，**CLI 优先 + 独立审查 + 交叉验证**
 
 ## 快速开始
 
@@ -21,7 +21,27 @@
 /do "fix bug" --cli
 ```
 
-## v5.2 新特性
+## v5.4 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **Grounding 机制** | 每个结论必须有 `file:line` 格式的代码证据 |
+| **独立审查者模式** | Codex 实现 → Gemini 审查（不同模型交叉审查） |
+| **保守表述原则** | 禁止绝对表述，强制不确定性声明 |
+| **交叉验证** | 多模型验证，Claude 仲裁分歧 |
+| **测试分类标准** | 基于代码行为而非文件名判断测试类型 |
+| **NotebookLM 知识锚点** | 文档作为第三验证源（可选） |
+
+## v5.3 特性
+
+| 特性 | 说明 |
+|------|------|
+| **CLI 优先模式** | 默认使用 `codex exec --full-auto` 和 `gemini -s --yolo` |
+| **禁止 MCP** | 不使用 `mcp__codex-cli__*` 或 `mcp__gemini-cli__*` |
+| **RALPH 5 阶段** | 新增 Phase 4 独立审查 + Phase 5 仲裁验证 |
+| **ARCHITECT 6 阶段** | 新增 Phase 5 独立审查 + Phase 6 仲裁验证 |
+
+## v5.2 特性
 
 | 特性 | 说明 |
 |------|------|
@@ -100,8 +120,8 @@
 | **DIRECT_TEXT** | 线性 | 1 | 立即行动 | Claude |
 | **DIRECT_CODE** | 线性 | 1 | 立即行动 | **Codex** |
 | **PLANNED** | 线性 | 3 | 计划先行 | Claude + **Codex** |
-| **RALPH** | **循环/并行** | 4 | 分而治之 | Claude + **Codex** |
-| **ARCHITECT** | **循环/并行** | 5 | 架构优先 | **Gemini** + Claude + **Codex** |
+| **RALPH** | **循环/并行** | 5 | 分而治之 | Claude + **Codex** + **Gemini** |
+| **ARCHITECT** | **循环/并行** | 6 | 架构优先 | **Gemini** + Claude + **Codex** |
 | **UI_FLOW** | 线性 | 3 | 用户至上 | **Gemini** |
 
 **并行模式 (v5.2)**: RALPH 和 ARCHITECT 路由支持并行执行，同一波次内的无依赖子任务可同时启动。
@@ -183,41 +203,57 @@ RALPH 和 ARCHITECT 路由使用循环执行模式，通过 Stop Hook 实现"任
 - UI + Backend 混合: ~1.7x 提速
 - 多文件审查: ~2.7x 提速
 
-### MCP 强制调用与 CLI 后备 (v5.1)
+### CLI 优先模式 (v5.3+)
 
-指定阶段必须通过 MCP 工具调用对应模型，MCP 失败时可降级到 CLI 直接调用：
+**v5.3 起默认使用 CLI 直接调用**，禁止使用 MCP 工具（`mcp__codex-cli__*` 和 `mcp__gemini-cli__*`）。
 
-#### 强制使用 Codex 的阶段
-
-| 路由 | 阶段 | MCP 工具 |
-|------|------|----------|
-| DIRECT_CODE | Phase 1 | `mcp__codex-cli__codex` |
-| PLANNED | Phase 2-3 | `mcp__codex-cli__codex` |
-| RALPH | Phase 2-4 | `mcp__codex-cli__codex` |
-| ARCHITECT | Phase 3-5 | `mcp__codex-cli__codex` |
-
-#### 强制使用 Gemini 的阶段
-
-| 路由 | 阶段 | MCP 工具 |
-|------|------|----------|
-| UI_FLOW | Phase 1-2 | `mcp__gemini-cli__ask-gemini` |
-| ARCHITECT | Phase 1 | `mcp__gemini-cli__ask-gemini` |
-
-**核心规则**:
-1. ⛔ 禁止替代 - 指定模型阶段禁止 Claude 自己执行
-2. 🖥️ CLI 后备 - MCP 失败后可切换到 CLI 直接调用
-3. ❌ 禁止静默降级到 Claude - 代码任务需用户确认
-4. ✅ 验证输出 - 每阶段明确标注实际使用的模型
-
-### CLI 直接调用 (v5.1 新增)
-
-当 MCP 超时或使用 `--cli` 标志时，直接通过 Bash 调用 CLI：
+#### Codex CLI 调用
 
 ```bash
-# Codex CLI
+# 完全自动模式（推荐）
+codex exec --full-auto "fix bug in auth.ts"
+
+# 带上下文的调用
+codex exec --full-auto --files src/auth/*.ts "implement JWT validation"
+```
+
+| 路由 | 阶段 | CLI 命令 |
+|------|------|----------|
+| DIRECT_CODE | Phase 1 | `codex exec --full-auto` |
+| PLANNED | Phase 2-3 | `codex exec --full-auto` |
+| RALPH | Phase 3 | `codex exec --full-auto` |
+| ARCHITECT | Phase 4 | `codex exec --full-auto` |
+
+#### Gemini CLI 调用
+
+```bash
+# Sandbox 模式 + YOLO（推荐）
+gemini -s --yolo "@src/components analyze UI patterns"
+
+# 带文件上下文
+gemini -s --yolo "@src/pages/login.tsx implement form validation"
+```
+
+| 路由 | 阶段 | CLI 命令 |
+|------|------|----------|
+| UI_FLOW | Phase 1-2 | `gemini -s --yolo` |
+| ARCHITECT | Phase 1, 5 | `gemini -s --yolo` |
+| RALPH | Phase 4 | `gemini -s --yolo` |
+
+**核心规则**:
+1. 🖥️ **CLI 优先** - 默认使用 Bash 直接调用 Codex/Gemini CLI
+2. ⛔ **禁止 MCP** - 不使用 `mcp__codex-cli__*` 或 `mcp__gemini-cli__*`
+3. ⛔ **禁止替代** - 指定模型阶段禁止 Claude 自己执行
+4. ❌ **禁止静默降级** - 代码任务需用户确认
+5. ✅ **验证输出** - 每阶段明确标注实际使用的模型
+
+### CLI 快捷命令
+
+```bash
+# Codex CLI 快捷方式
 /cli-codex "fix bug in auth.ts"
 
-# Gemini CLI
+# Gemini CLI 快捷方式
 /cli-gemini "@src/components analyze UI patterns"
 ```
 
@@ -231,20 +267,20 @@ RALPH 和 ARCHITECT 路由使用循环执行模式，通过 Stop Hook 实现"任
 | **Codex (GPT-5.2)** | 强推理、复杂开发、生态成熟 | **代码实现、API集成、审查** |
 | **Gemini 3 Pro** | 超长上下文、多模态、视觉理解 | **UI/UX、架构分析、看图写码** |
 
-### 路由-模型-阶段完整映射
+### 路由-模型-阶段完整映射 (v5.4)
 
-| 路由 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 |
-|------|---------|---------|---------|---------|---------|
-| **DIRECT_TEXT** | Claude | - | - | - | - |
-| **DIRECT_CODE** | **Codex** | - | - | - | - |
-| **PLANNED** | Claude | **Codex** | **Codex** | - | - |
-| **RALPH** | Claude | **Codex** | **Codex** | **Codex** | - |
-| **ARCHITECT** | **Gemini** | Claude | **Codex** | **Codex** | **Codex** |
-| **UI_FLOW** | **Gemini** | **Gemini** | Claude | - | - |
+| 路由 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 |
+|------|---------|---------|---------|---------|---------|---------|
+| **DIRECT_TEXT** | Claude | - | - | - | - | - |
+| **DIRECT_CODE** | **Codex** | - | - | - | - | - |
+| **PLANNED** | Claude | **Codex** | **Codex** | - | - | - |
+| **RALPH** | Claude | Claude | **Codex** | **Gemini** | Claude | - |
+| **ARCHITECT** | **Gemini** | Claude | Claude | **Codex** | **Gemini** | Claude |
+| **UI_FLOW** | **Gemini** | **Gemini** | Claude | - | - | - |
 
-**图例**：
-- **Codex** = 强制使用 `mcp__codex-cli__codex`
-- **Gemini** = 强制使用 `mcp__gemini-cli__ask-gemini`
+**图例** (v5.3+ CLI 优先)：
+- **Codex** = `codex exec --full-auto`
+- **Gemini** = `gemini -s --yolo`
 - Claude = 直接执行
 
 ### 模型选择原则
@@ -274,8 +310,8 @@ RALPH 和 ARCHITECT 路由使用循环执行模式，通过 Stop Hook 实现"任
 | DIRECT_TEXT | `output.txt` |
 | DIRECT_CODE | `output.txt` |
 | PLANNED | `1_plan.md`, `2_implementation.md`, `3_review.md` |
-| RALPH | `1_analysis.md`, `2_plan.md`, `3_subtask_*.md`, `4_review.md` |
-| ARCHITECT | `1_architecture_analysis.md`, `2_architecture_design.md`, `3_implementation_plan.md`, `4_phase_*.md`, `5_acceptance_review.md` |
+| RALPH | `1_analysis.md`, `2_plan.md`, `3_subtask_*.md`, `4_review.md`, `5_arbitration.md` |
+| ARCHITECT | `1_architecture_analysis.md`, `2_architecture_design.md`, `3_implementation_plan.md`, `4_phase_*.md`, `5_review.md`, `6_arbitration.md` |
 | UI_FLOW | `1_ui_design.md`, `2_implementation.md`, `3_preview.md` |
 
 ## 配置文件
@@ -381,11 +417,13 @@ model_reasoning_effort = "xhigh"
 
 ## 依赖插件
 
-- **delta-skillpack v5.2.0** - 提供 `/do` 命令及相关 skills（已全局安装）
+- **delta-skillpack v5.4.0** - 提供 `/do` 命令及相关 skills（已全局安装）
+  - v5.4 新增：Grounding 机制（代码证据 `file:line` 格式）
+  - v5.4 新增：独立审查者模式（Codex → Gemini → Claude 仲裁）
+  - v5.4 新增：保守表述原则、交叉验证、测试分类标准
+  - v5.3 新增：CLI 优先模式（禁止 MCP，强制 CLI 调用）
   - v5.2 新增：异步并行执行（`--parallel` / `--no-parallel`）
-  - v5.2 新增：DAG 依赖分析、波次管理
-  - v5.2 新增：跨模型并行（Codex + Gemini 同时工作）
-  - v5.2 新增：TaskOutput 轮询收集、并行恢复
+  - v5.2 新增：DAG 依赖分析、波次管理、跨模型并行
   - v5.1：`--cli` 标志，CLI 直接调用，自动 CLI 降级
   - v5.0：原子检查点、结构化日志、任务粒度控制
   - v4.0：MCP 强制调用、循环执行引擎

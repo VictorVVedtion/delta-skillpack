@@ -1,8 +1,13 @@
-# MCP 调度模块 v5.3.0
+# MCP 调度模块 v5.4.0
 
 ## 概述
 
-本模块定义了多模型协作的强制调用规则，确保正确的模型被用于正确的阶段。v5.2 新增 **异步并行调度**，v5.3.0 强化 **CLI 优先模式**，彻底解决 MCP 中断和 TTY 依赖问题。
+本模块定义了多模型协作的调用规则，确保正确的模型被用于正确的阶段。v5.4.0 新增 **独立审查者模式**（Codex 实现 → Gemini 审查 → Claude 仲裁），强化抗幻觉能力。
+
+**关键变更 (v5.4.0)**:
+- RALPH Phase 4 从 Codex 改为 **Gemini 独立审查**
+- ARCHITECT Phase 5 从 Codex 改为 **Gemini 独立审查**
+- 新增仲裁验证阶段（Claude 直接执行）
 
 ---
 
@@ -87,7 +92,8 @@ gemini "@src/components 分析 UI 组件结构，设计登录表单" -s --yolo
 
 | 版本 | 特性 |
 |------|------|
-| **v5.3.0** | 修复 CLI 非交互式执行：Codex `--full-auto`，Gemini `--yolo` |
+| **v5.4.0** | 独立审查者模式：RALPH/ARCHITECT 审查阶段改为 Gemini，新增仲裁验证阶段 |
+| v5.3.0 | 修复 CLI 非交互式执行：Codex `--full-auto`，Gemini `--yolo` |
 | v5.2.1 | CLI 优先模式强化，执行模式决策树，彻底解决 MCP 中断 |
 | v5.2 | 异步并行调度、波次管理、跨模型并行、TaskOutput 轮询 |
 | v5.1 | CLI 直接调用后备机制 |
@@ -158,7 +164,7 @@ phases:
     reason: "专业代码审查"
 ```
 
-#### RALPH (46-70分)
+#### RALPH (46-70分) - v5.4.0 更新
 ```yaml
 phases:
   - phase: 1
@@ -174,24 +180,29 @@ phases:
   - phase: 3
     name: "执行子任务"
     model: CODEX
-    tool: mcp__codex-cli__codex
+    cli: "codex exec --full-auto"
     mandatory: true
     reason: "批量功能开发"
   - phase: 4
-    name: "综合审查"
-    model: CODEX
-    tool: mcp__codex-cli__codex
+    name: "独立审查"
+    model: GEMINI  # v5.4 变更：从 CODEX 改为 GEMINI
+    cli: "gemini -s --yolo"
     mandatory: true
-    reason: "综合审查"
+    reason: "独立审查，避免自我印证偏差"
+  - phase: 5
+    name: "仲裁验证"
+    model: CLAUDE  # v5.4 新增
+    tool: null
+    reason: "仲裁分歧，最终决策"
 ```
 
-#### ARCHITECT (71-100分)
+#### ARCHITECT (71-100分) - v5.4.0 更新
 ```yaml
 phases:
   - phase: 1
     name: "架构分析"
     model: GEMINI
-    tool: mcp__gemini-cli__ask-gemini
+    cli: "gemini -s --yolo"
     mandatory: true
     reason: "整个项目分析，超长上下文"
   - phase: 2
@@ -207,15 +218,20 @@ phases:
   - phase: 4
     name: "分阶段实施"
     model: CODEX
-    tool: mcp__codex-cli__codex
+    cli: "codex exec --full-auto"
     mandatory: true
     reason: "批量开发"
   - phase: 5
-    name: "验收审查"
-    model: CODEX
-    tool: mcp__codex-cli__codex
+    name: "独立审查"
+    model: GEMINI  # v5.4 变更：从 CODEX 改为 GEMINI
+    cli: "gemini -s --yolo"
     mandatory: true
-    reason: "深度审查"
+    reason: "独立审查，避免自我印证偏差"
+  - phase: 6
+    name: "仲裁验证"
+    model: CLAUDE  # v5.4 新增
+    tool: null
+    reason: "仲裁分歧，最终决策"
 ```
 
 #### UI_FLOW
@@ -253,11 +269,26 @@ phases:
 ### 调用前检查清单
 
 ```
-[ ] 确认当前阶段的分配模型
-[ ] 如果 mandatory=true，准备 MCP 调用参数
-[ ] 输出调用提示（见下方格式）
-[ ] 执行 MCP 调用
-[ ] 验证返回结果
+[ ] 1. 读取 .skillpackrc 配置
+[ ] 2. 检查 cli.prefer_cli_over_mcp 值
+[ ] 3. 确认当前阶段的分配模型
+[ ] 4. 如果 mandatory=true：
+      - prefer_cli_over_mcp=true → 准备 CLI 命令
+      - prefer_cli_over_mcp=false → 准备 MCP 调用参数
+[ ] 5. 输出调用提示（标注执行模式）
+[ ] 6. 执行调用（CLI 或 MCP）
+[ ] 7. 验证返回结果
+[ ] 8. 在输出中标注实际使用的模型和模式
+```
+
+### 执行验证检查清单（阶段完成后）
+
+```
+[ ] 确认实际使用的模型与规划一致
+[ ] 确认执行模式与配置一致
+[ ] 如发生降级，确认用户已授权
+[ ] 输出文件正确保存
+[ ] 日志记录执行详情
 ```
 
 ### 阶段入口输出格式

@@ -1,8 +1,35 @@
 {
-  "version": "5.0",
+  "version": "5.4",
   "knowledge": {
     "default_notebook": "ffa73340-e818-4bcc-9809-a58e62e52982",
     "auto_query": true
+  },
+  "routing": {
+    "weights": {
+      "scope": 25,
+      "dependency": 20,
+      "technical": 20,
+      "risk": 15,
+      "time": 10,
+      "ui": 10
+    },
+    "thresholds": {
+      "direct": 20,
+      "planned": 45,
+      "ralph": 70
+    }
+  },
+  "checkpoint": {
+    "auto_save": true,
+    "atomic_writes": true,
+    "backup_count": 3,
+    "save_interval_minutes": 5,
+    "max_history": 10
+  },
+  "cross_validation": {
+    "enabled": true,
+    "require_arbitration_on_disagreement": true,
+    "min_confidence_for_auto_pass": "high"
   },
   "output": {
     "current_dir": ".skillpack/current",
