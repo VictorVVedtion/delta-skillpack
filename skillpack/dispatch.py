@@ -161,11 +161,12 @@ class ModelDispatcher:
         Returns:
             查询结果文本，失败返回 None
         """
-        if self._mock_mode:
-            return f"[mock knowledge base response] Query: {query[:100]}"
-
+        # 先检查 notebook_id（无论是否 mock 模式）
         if not notebook_id:
             return None
+
+        if self._mock_mode:
+            return f"[mock knowledge base response] Query: {query[:100]}"
 
         start_time = time.time()
 
