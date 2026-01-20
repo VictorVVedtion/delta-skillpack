@@ -26,9 +26,9 @@ from .executor import TaskExecutor
 
 
 @click.group()
-@click.version_option(version="2.0.0", prog_name="skillpack")
+@click.version_option(version="5.4.1", prog_name="skillpack")
 def cli():
-    """Skillpack - 智能任务执行器 v5.4.0"""
+    """Skillpack - 智能任务执行器 v5.4.1"""
     pass
 
 

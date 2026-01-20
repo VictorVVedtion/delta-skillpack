@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openalpha"
-version = "2.0.0"
+version = "5.4.1"
 description = "OpenAlpha - AI 辅助开发工具集"
 readme = "README.md"
 license = {text = "MIT"}
@@ -24,7 +24,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []
+dependencies = [
+    "click>=8.0.0",
+]
+
+[project.scripts]
+skillpack = "skillpack.cli:cli"
 
 [project.optional-dependencies]
 dev = [

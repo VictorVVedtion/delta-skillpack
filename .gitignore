@@ -42,9 +42,8 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 
-# SkillPack runtime
-.skillpack/current/
-.skillpack/history/
+# SkillPack runtime (all runtime/test artifacts)
+.skillpack/
 
 # OS
 .DS_Store

@@ -105,7 +105,7 @@ class TestCLI:
         result = self.runner.invoke(cli, ["--version"])
 
         assert result.exit_code == 0
-        assert "2.0.0" in result.output
+        assert "5.4.1" in result.output
 
 
 class TestCLIStatusWithCheckpoint:

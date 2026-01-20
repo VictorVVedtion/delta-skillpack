@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="delta-skillpack",
-    version="2.0.0",
+    version="5.4.1",
     packages=find_packages(),
     install_requires=[
         "click>=8.0.0",
@@ -17,7 +17,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "skill=skillpack.cli:main",
+            "skillpack=skillpack.cli:cli",
         ],
     },
     python_requires=">=3.9",
