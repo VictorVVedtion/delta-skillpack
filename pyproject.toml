@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openalpha"
-version = "5.4.1"
+version = "5.4.2"
 description = "OpenAlpha - AI 辅助开发工具集"
 readme = "README.md"
 license = {text = "MIT"}
