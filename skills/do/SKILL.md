@@ -71,7 +71,7 @@ version: 5.4.1
 ## 示例
 
 ```
-/do fix typo in README                      # → DIRECT_TEXT (Claude)
+/do fix typo in README                      # → DIRECT_TEXT (Codex v5.4.1+)
 /do fix bug in auth.ts                      # → DIRECT_CODE (Codex)
 /do add user authentication with JWT        # → PLANNED (Claude + Codex)
 /do 完整 fork hyperliquid SDK               # → RALPH (Claude + Codex)
@@ -168,11 +168,11 @@ version: 5.4.1
 
 ## 执行策略
 
-### DIRECT_TEXT（文本直接执行）- Claude
+### DIRECT_TEXT（文本直接执行）- Codex (v5.4.1+)
 
 ```
-Phase 1 (100%): 直接执行
-  └── Claude 直接操作，输出简短摘要
+Phase 1 (100%): Codex 执行
+  └── Codex CLI 直接操作（文本/配置/文档修改）
 ```
 
 ### DIRECT_CODE（代码直接执行）- Codex

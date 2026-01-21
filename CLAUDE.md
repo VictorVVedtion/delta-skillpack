@@ -67,7 +67,7 @@
 智能分析任务复杂度，自动选择最优执行路径和模型：
 
 ```bash
-# 文本任务 (DIRECT_TEXT) → Claude 直接执行
+# 文本任务 (DIRECT_TEXT) → Codex 执行 (v5.4.1+)
 /do "fix typo in README"
 
 # 代码任务 (DIRECT_CODE) → Codex 执行
@@ -117,7 +117,7 @@
 
 | 路由 | 执行模式 | 阶段 | 核心原则 | 主执行模型 |
 |------|----------|------|----------|------------|
-| **DIRECT_TEXT** | 线性 | 1 | 立即行动 | Claude |
+| **DIRECT_TEXT** | 线性 | 1 | 立即行动 | **Codex** (v5.4.1+) |
 | **DIRECT_CODE** | 线性 | 1 | 立即行动 | **Codex** |
 | **PLANNED** | 线性 | 3 | 计划先行 | Claude + **Codex** |
 | **RALPH** | **循环/并行** | 5 | 分而治之 | Claude + **Codex** + **Gemini** |

@@ -288,12 +288,15 @@ def _load_config() -> SkillpackConfig:
     )
 
     # 解析 cli 配置（关键！）
+    # v5.4.2: 优先使用 codex_command，codex_path 为废弃别名
     cli_data = data.get("cli", {})
+    codex_cmd = cli_data.get("codex_command") or cli_data.get("codex_path") or "codex"
+    gemini_cmd = cli_data.get("gemini_command") or cli_data.get("gemini_path") or "gemini"
     cli = CLIConfig(
         prefer_cli_over_mcp=cli_data.get("prefer_cli_over_mcp", True),
         cli_timeout_seconds=cli_data.get("cli_timeout_seconds", 600),
-        codex_command=cli_data.get("codex_command", cli_data.get("codex_path", "codex")),
-        gemini_command=cli_data.get("gemini_command", cli_data.get("gemini_path", "gemini")),
+        codex_command=codex_cmd,
+        gemini_command=gemini_cmd,
         auto_context=cli_data.get("auto_context", True),
         max_context_files=cli_data.get("max_context_files", 15),
         max_lines_per_file=cli_data.get("max_lines_per_file", 800),

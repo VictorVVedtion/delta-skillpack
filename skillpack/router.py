@@ -178,9 +178,8 @@ class TaskRouter:
         thresholds = self.config.routing.thresholds
         
         if total <= thresholds["direct"]:
-            # 区分 TEXT 和 CODE
-            if self._is_text_task(description):
-                return TaskComplexity.SIMPLE, ExecutionRoute.DIRECT
+            # v5.4.2: DIRECT_TEXT 和 DIRECT_CODE 统一由 DirectExecutor 处理
+            # 具体的 TEXT/CODE 区分在 executor.py 中根据任务描述判断
             return TaskComplexity.SIMPLE, ExecutionRoute.DIRECT
         elif total <= thresholds["planned"]:
             return TaskComplexity.MEDIUM, ExecutionRoute.PLANNED

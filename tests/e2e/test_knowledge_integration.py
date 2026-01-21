@@ -58,10 +58,12 @@ class TestKnowledgeBaseRouting:
 class TestDispatcherKnowledgeQuery:
     """测试 Dispatcher 知识库查询方法"""
 
-    def test_query_knowledge_base_mock_mode(self):
-        """Mock 模式下返回模拟响应（pytest 自动启用 mock）"""
+    def test_query_knowledge_base_mock_mode(self, monkeypatch):
+        """Mock 模式下返回模拟响应（需显式设置 SKILLPACK_MOCK_MODE=1）"""
+        # v5.4.2: 必须显式设置环境变量启用 mock 模式
+        monkeypatch.setenv("SKILLPACK_MOCK_MODE", "1")
         config = SkillpackConfig()
-        dispatcher = ModelDispatcher(config)  # pytest 环境自动 mock
+        dispatcher = ModelDispatcher(config)
 
         result = dispatcher.query_knowledge_base("nb-123", "what are the requirements?")
         assert result is not None
