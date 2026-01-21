@@ -185,8 +185,14 @@ class ModelDispatcher:
         self._current_phase_name = phase_name
 
     def _detect_mock_mode(self) -> bool:
-        """检测是否启用 mock 模式（测试环境避免真实调用外部 CLI）"""
-        return bool(os.environ.get("SKILLPACK_MOCK_MODE") or os.environ.get("PYTEST_CURRENT_TEST"))
+        """检测是否启用 mock 模式（仅测试环境使用）
+
+        v5.4.2: 默认禁用 mock 模式，只有显式设置 SKILLPACK_MOCK_MODE=1 时才启用。
+        PYTEST_CURRENT_TEST 不再自动触发 mock（测试应使用 SKILLPACK_MOCK_MODE）。
+        """
+        # 只有显式设置 SKILLPACK_MOCK_MODE=1/true/yes 时才启用 mock
+        mock_env = os.environ.get("SKILLPACK_MOCK_MODE", "").lower()
+        return mock_env in ("1", "true", "yes")
 
     def _mock_result(self, model: ModelType, prompt: str) -> DispatchResult:
         """生成 mock 调用结果"""
