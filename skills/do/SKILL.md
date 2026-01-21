@@ -1,7 +1,7 @@
 ---
-name: delta:do
+name: do
 description: 智能任务执行器 - 抗幻觉升级（Grounding + 独立审查 + 保守表述 + CLI优先）
-version: 5.4.0
+version: 5.4.1
 ---
 
 # delta:do - 智能任务执行器 v5.4.0
