@@ -105,7 +105,7 @@ class TestCLI:
         result = self.runner.invoke(cli, ["--version"])
 
         assert result.exit_code == 0
-        assert "5.4.1" in result.output
+        assert "5.4.2" in result.output
 
 
 class TestCLIStatusWithCheckpoint:
@@ -220,7 +220,13 @@ class TestCLIListCheckpoints:
                 entry_dir.mkdir(parents=True)
                 checkpoint_data = {
                     "task_id": f"task-{i}",
-                    "description": f"任务描述 {i}",
+                    "task_description": f"任务描述 {i}",  # 正确的字段名
+                    "route": "PLANNED",
+                    "execution": {
+                        "current_phase": 1,
+                        "total_phases": 3,
+                        "status": "running"
+                    }
                 }
                 (entry_dir / "checkpoint.json").write_text(
                     json.dumps(checkpoint_data, ensure_ascii=False)

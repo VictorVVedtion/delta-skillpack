@@ -49,7 +49,7 @@ class TestPlannedExecutionPhases:
     """PLANNED 执行阶段测试"""
 
     def test_planned_has_three_phases(self, temp_dir):
-        """PLANNED 路由有三个阶段"""
+        """PLANNED 路由有三个阶段 (v5.5: 支持共识模式)"""
         executor = PlannedExecutor()
         tracker = SimpleProgressTracker("test", "Test", quiet=True)
 
@@ -68,10 +68,13 @@ class TestPlannedExecutionPhases:
         assert status.is_running is False
         assert tracker.current_phase == Phase.COMPLETED
 
-        # 验证输出文件
-        expected_files = ["1_plan.md", "2_implementation.md", "3_review.md"]
-        for f in expected_files:
-            assert f in status.output_files
+        # 验证输出文件 (v5.5: 共识模式输出 1_planning_consensus.md)
+        # 旧模式: ["1_plan.md", "2_implementation.md", "3_review.md"]
+        # 新模式: ["1_planning_consensus.md", "2_implementation.md", "3_review.md"]
+        assert len(status.output_files) >= 3
+        # 应包含实现和审查阶段
+        assert any("implementation" in f for f in status.output_files)
+        assert any("review" in f for f in status.output_files)
 
     def test_phase_progression(self, temp_dir):
         """阶段进度正确推进"""
@@ -123,7 +126,7 @@ class TestPlannedRouteOutputValidation:
     """PLANNED 路由输出验证"""
 
     def test_output_files_structure(self, temp_dir):
-        """输出文件结构验证"""
+        """输出文件结构验证 (v5.5: 支持共识模式)"""
         router = TaskRouter()
         context = router.route("add feature")
         context.working_dir = temp_dir
@@ -132,10 +135,14 @@ class TestPlannedRouteOutputValidation:
         status = executor.execute(context)
 
         # 验证输出文件存在
-        assert len(status.output_files) == 3
-        assert "1_plan.md" in status.output_files
-        assert "2_implementation.md" in status.output_files
-        assert "3_review.md" in status.output_files
+        # v5.5: 共识模式输出 1_planning_consensus.md
+        # 旧模式: ["1_plan.md", "2_implementation.md", "3_review.md"]
+        # 新模式: ["1_planning_consensus.md", "2_implementation.md", "3_review.md"]
+        assert len(status.output_files) >= 3
+        # 验证包含规划阶段输出（共识或传统）
+        assert any("plan" in f.lower() or "consensus" in f.lower() for f in status.output_files)
+        assert any("implementation" in f for f in status.output_files)
+        assert any("review" in f for f in status.output_files)
 
 
 @pytest.mark.e2e

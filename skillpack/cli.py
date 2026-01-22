@@ -41,7 +41,8 @@ def cli():
 @click.option("--parallel/--no-parallel", default=None, help="并行执行控制")
 @click.option("--cli", "cli_mode", is_flag=True, help="CLI 直接调用模式")
 @click.option("-e", "--explain", is_flag=True, help="仅显示评分和路由")
-@click.option("--resume", "resume_task", default=None, is_flag=False, flag_value="__latest__", help="从检查点恢复 (可指定 task_id)")
+@click.option("--resume", "resume_flag", is_flag=True, help="从检查点恢复最近任务")
+@click.option("--resume-task", "resume_task_id", default=None, help="从检查点恢复指定任务 (task_id)")
 @click.option("--list-checkpoints", is_flag=True, help="列出可恢复任务")
 @click.option("--quiet", is_flag=True, help="安静模式")
 def do(
@@ -51,7 +52,8 @@ def do(
     parallel: Optional[bool],
     cli_mode: bool,
     explain: bool,
-    resume_task: Optional[str],
+    resume_flag: bool,
+    resume_task_id: Optional[str],
     list_checkpoints: bool,
     quiet: bool,
 ):
@@ -60,10 +62,9 @@ def do(
         _list_checkpoints()
         return
 
-    if resume_task is not None:
-        # --resume 或 --resume <task_id>
-        task_id = None if resume_task == "__latest__" else resume_task
-        _resume_task(task_id)
+    if resume_flag or resume_task_id is not None:
+        # --resume 或 --resume-task <task_id>
+        _resume_task(resume_task_id)
         return
     
     if not description:

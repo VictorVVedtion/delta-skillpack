@@ -211,6 +211,33 @@ class ModelDispatcher:
         """获取当前执行模式"""
         return ExecutionMode.CLI if self.use_cli else ExecutionMode.MCP
 
+    def call_codex_for_planning(
+        self,
+        prompt: str,
+        context_files: Optional[List[str]] = None
+    ) -> DispatchResult:
+        """
+        调用 Codex 进行规划（非实现）。
+
+        v5.5: 专用于多模型规划共识阶段，使用 read-only sandbox。
+
+        Args:
+            prompt: 规划任务提示
+            context_files: 相关文件列表
+
+        Returns:
+            DispatchResult 包含规划结果
+        """
+        if self._mock_mode:
+            return self._mock_result(ModelType.CODEX, f"[PLANNING] {prompt}")
+
+        # 规划阶段使用 read-only sandbox，确保不修改文件
+        return self._call_codex_cli(
+            prompt=prompt,
+            context_files=context_files,
+            sandbox="read-only"
+        )
+
     def call_codex(
         self,
         prompt: str,
@@ -342,25 +369,38 @@ class ModelDispatcher:
         full_prompt = self._build_prompt_with_context(prompt, context_files)
 
         # 构建命令
-        # --full-auto = -a on-request + -s workspace-write
-        cmd = [
-            self.config.cli.codex_command,
-            "exec",
-            full_prompt,
-            "--full-auto"
-        ]
-
-        # 如果 sandbox 不是默认值，显式指定
-        if sandbox != "workspace-write":
+        # --full-auto = convenience alias for automated execution with workspace-write sandbox
+        # v5.5: 修复 CLI 参数，移除不存在的 -a 参数
+        if sandbox == "workspace-write":
+            # 默认: 使用 --full-auto
+            cmd = [
+                self.config.cli.codex_command,
+                "exec",
+                full_prompt,
+                "--full-auto",
+                "--skip-git-repo-check"
+            ]
+            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" --full-auto"
+        elif sandbox == "read-only":
+            # 规划模式: read-only sandbox，用于只分析不执行的场景
+            cmd = [
+                self.config.cli.codex_command,
+                "exec",
+                full_prompt,
+                "-s", "read-only",
+                "--skip-git-repo-check"
+            ]
+            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s read-only"
+        else:
+            # danger-full-access 或其他
             cmd = [
                 self.config.cli.codex_command,
                 "exec",
                 full_prompt,
                 "-s", sandbox,
-                "-a", "on-request"
+                "--skip-git-repo-check"
             ]
-
-        command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" --full-auto"
+            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s {sandbox}"
 
         try:
             self._report_progress("Codex 执行中...", 0.3)
@@ -735,6 +775,64 @@ class ModelDispatcher:
     def get_execution_log(self) -> List[dict]:
         """获取执行日志"""
         return self._execution_log.copy()
+
+    def get_claude_planning_prompt(
+        self,
+        task: str,
+        context: Optional[str] = None
+    ) -> str:
+        """
+        生成 Claude 规划 prompt。
+
+        v5.5: 用于多模型规划共识，当前 Claude 实例直接执行此 prompt。
+
+        Args:
+            task: 任务描述
+            context: 额外上下文信息
+
+        Returns:
+            格式化的规划 prompt
+        """
+        prompt = f"""作为资深软件架构师，为以下任务设计详细的实施方案。
+
+## 任务描述
+{task}
+
+## 要求
+1. **方案摘要**: 简明扼要地描述你的实施思路
+2. **子任务分解**: 将任务拆分为可执行的子任务（3-8个）
+3. **风险评估**: 识别潜在风险和挑战
+4. **方案类型**: 判断你的方案是保守型、平衡型还是激进型
+
+## 输出格式（JSON）
+```json
+{{
+    "summary": "方案摘要...",
+    "approach": "conservative|balanced|aggressive",
+    "subtasks": [
+        {{
+            "id": "task-1",
+            "description": "子任务描述",
+            "priority": 1,
+            "estimated_effort": "low|medium|high",
+            "dependencies": [],
+            "files": ["相关文件路径"]
+        }}
+    ],
+    "risks": ["风险1", "风险2"],
+    "rationale": "选择这个方案的理由...",
+    "confidence": 0.85
+}}
+```
+
+注意：
+- 只做规划，不要编写实际代码
+- 子任务要具体可执行
+- 考虑依赖关系和执行顺序
+"""
+        if context:
+            prompt = f"## 上下文信息\n{context}\n\n" + prompt
+        return prompt
 
     def format_phase_header(
         self,

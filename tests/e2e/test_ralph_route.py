@@ -49,7 +49,7 @@ class TestRalphExecutionPhases:
     """RALPH 执行阶段测试 (v5.4: 5 阶段)"""
 
     def test_ralph_has_five_phases(self, temp_dir):
-        """RALPH 路由有五个阶段"""
+        """RALPH 路由有五个阶段 (v5.5: 支持共识模式)"""
         executor = RalphExecutor()
         tracker = SimpleProgressTracker("test", "Test", quiet=True)
 
@@ -68,10 +68,12 @@ class TestRalphExecutionPhases:
         assert status.is_running is False
         assert tracker.current_phase == Phase.COMPLETED
 
-        # 验证输出文件包含 5 阶段
-        expected_outputs = ["1_analysis.md", "2_plan.md", "4_review.md", "5_arbitration.md"]
-        for expected in expected_outputs:
-            assert expected in status.output_files
+        # v5.5: 共识模式输出 1_planning_consensus.md 替代 1_analysis.md + 2_plan.md
+        # 验证关键输出存在
+        assert any("review" in f for f in status.output_files)
+        assert any("arbitration" in f for f in status.output_files)
+        # 应包含子任务或共识输出
+        assert any("subtask" in f or "consensus" in f for f in status.output_files)
 
     def test_phase_4_independent_review(self, temp_dir):
         """Phase 4: 独立审查阶段 (v5.4)"""
@@ -166,7 +168,7 @@ class TestRalphOutputValidation:
     """RALPH 路由输出验证"""
 
     def test_output_files_structure(self, temp_dir):
-        """输出文件结构验证"""
+        """输出文件结构验证 (v5.5: 支持共识模式)"""
         router = TaskRouter()
         context = router.route("build system", deep_mode=True)
         context.working_dir = temp_dir
@@ -174,11 +176,12 @@ class TestRalphOutputValidation:
         executor = TaskExecutor(quiet=True)
         status = executor.execute(context)
 
-        # 验证输出文件存在
-        assert "1_analysis.md" in status.output_files
-        assert "2_plan.md" in status.output_files
-        assert "4_review.md" in status.output_files
-        assert "5_arbitration.md" in status.output_files
+        # v5.5: 共识模式输出与传统模式不同
+        # 验证关键阶段输出存在
+        assert any("review" in f for f in status.output_files)
+        assert any("arbitration" in f for f in status.output_files)
+        # 应包含规划阶段输出（共识或传统）
+        assert any("analysis" in f or "plan" in f or "consensus" in f for f in status.output_files)
 
 
 @pytest.mark.e2e

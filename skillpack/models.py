@@ -103,6 +103,26 @@ class CrossValidationConfig:
 
 
 @dataclass
+class ConsensusConfig:
+    """
+    多模型规划共识配置 (v5.5)
+
+    在规划阶段引入 Codex/ChatGPT 打破 Claude 的"一言堂"，
+    形成多模型共识后再执行。
+    """
+    enabled: bool = True                  # 是否启用多模型规划共识
+    parallel_planning: bool = True        # 是否并行规划（Claude + Codex 同时）
+    arbitration_threshold: float = 0.7    # 触发仲裁的共识度阈值
+    planning_timeout_seconds: int = 120   # 单模型规划超时时间
+    fallback_to_single_model: bool = True # 超时/失败时降级到单模型
+    covered_routes: list = None           # 覆盖的路由（默认: PLANNED, RALPH, ARCHITECT）
+
+    def __post_init__(self):
+        if self.covered_routes is None:
+            self.covered_routes = ["PLANNED", "RALPH", "ARCHITECT"]
+
+
+@dataclass
 class OutputConfig:
     """输出目录配置"""
     current_dir: str = ".skillpack/current"
@@ -112,7 +132,7 @@ class OutputConfig:
 @dataclass
 class SkillpackConfig:
     """Skillpack 配置"""
-    version: str = "5.4"
+    version: str = "5.5"
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     routing: RoutingConfig = field(default_factory=RoutingConfig)
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
@@ -120,6 +140,7 @@ class SkillpackConfig:
     mcp: MCPConfig = field(default_factory=MCPConfig)
     cli: CLIConfig = field(default_factory=CLIConfig)
     cross_validation: CrossValidationConfig = field(default_factory=CrossValidationConfig)
+    consensus: ConsensusConfig = field(default_factory=ConsensusConfig)  # v5.5 新增
     output: OutputConfig = field(default_factory=OutputConfig)
 
 
