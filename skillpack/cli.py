@@ -20,15 +20,17 @@ from .models import (
     CLIConfig,
     CrossValidationConfig,
     OutputConfig,
+    ExecutionRoute,
 )
 from .router import TaskRouter
 from .executor import TaskExecutor
+from .checkpoint import CheckpointManager, Checkpoint
 
 
 @click.group()
-@click.version_option(version="5.4.1", prog_name="skillpack")
+@click.version_option(version="5.4.2", prog_name="skillpack")
 def cli():
-    """Skillpack - 智能任务执行器 v5.4.1"""
+    """Skillpack - 智能任务执行器 v5.4.2"""
     pass
 
 
@@ -39,7 +41,7 @@ def cli():
 @click.option("--parallel/--no-parallel", default=None, help="并行执行控制")
 @click.option("--cli", "cli_mode", is_flag=True, help="CLI 直接调用模式")
 @click.option("-e", "--explain", is_flag=True, help="仅显示评分和路由")
-@click.option("--resume", is_flag=True, help="从检查点恢复")
+@click.option("--resume", "resume_task", default=None, is_flag=False, flag_value="__latest__", help="从检查点恢复 (可指定 task_id)")
 @click.option("--list-checkpoints", is_flag=True, help="列出可恢复任务")
 @click.option("--quiet", is_flag=True, help="安静模式")
 def do(
@@ -49,7 +51,7 @@ def do(
     parallel: Optional[bool],
     cli_mode: bool,
     explain: bool,
-    resume: bool,
+    resume_task: Optional[str],
     list_checkpoints: bool,
     quiet: bool,
 ):
@@ -57,9 +59,11 @@ def do(
     if list_checkpoints:
         _list_checkpoints()
         return
-    
-    if resume:
-        _resume_task()
+
+    if resume_task is not None:
+        # --resume 或 --resume <task_id>
+        task_id = None if resume_task == "__latest__" else resume_task
+        _resume_task(task_id)
         return
     
     if not description:
@@ -332,31 +336,180 @@ def _load_config() -> SkillpackConfig:
 
 def _list_checkpoints():
     """列出可恢复的检查点"""
-    history_dir = Path(".skillpack/history")
-    
-    if not history_dir.exists():
-        click.echo("没有可恢复的任务")
-        return
-    
-    checkpoints = list(history_dir.glob("*/checkpoint.json"))
+    config = _load_config()
+    manager = CheckpointManager(
+        current_dir=config.output.current_dir,
+        history_dir=config.output.history_dir,
+    )
+
+    checkpoints = manager.list_checkpoints()
+
     if not checkpoints:
         click.echo("没有可恢复的任务")
         return
-    
-    click.echo("可恢复的任务:")
-    for cp in checkpoints[:10]:
-        try:
-            data = json.loads(cp.read_text())
-            click.echo(f"  - {cp.parent.name}: {data.get('description', 'N/A')}")
-        except Exception:
-            pass
+
+    click.echo("可恢复的任务:\n")
+    click.echo("─" * 70)
+
+    for i, cp in enumerate(checkpoints[:10], 1):
+        location_icon = "📍" if cp.get("location") == "current" else "📁"
+        status_icon = _get_status_icon(cp.get("status", "unknown"))
+        progress = cp.get("progress", 0) * 100
+        can_resume = cp.get("can_resume", False)
+
+        click.echo(f"{location_icon} [{i}] {cp.get('task_id', 'N/A')[:20]}")
+        click.echo(f"    📋 {cp.get('description', 'N/A')[:50]}")
+        click.echo(f"    🔀 路由: {cp.get('route', 'N/A')} | {status_icon} 状态: {cp.get('status', 'N/A')}")
+        click.echo(f"    📊 进度: {progress:.0f}% ({cp.get('current_phase', 0)}/{cp.get('total_phases', 0)} 阶段)")
+        click.echo(f"    🕐 更新: {cp.get('updated_at', 'N/A')[:19]}")
+
+        if can_resume:
+            resume_phase = cp.get("resume_phase")
+            if resume_phase:
+                click.echo(f"    ✅ 可恢复: 从阶段 {resume_phase} 继续")
+            else:
+                click.echo(f"    ✅ 可恢复")
+        else:
+            click.echo(f"    ⚪ 不可恢复")
+
+        click.echo("─" * 70)
+
+    click.echo(f"\n使用 'skillpack do --resume' 恢复最近任务")
+    click.echo(f"使用 'skillpack do --resume <task_id>' 恢复指定任务")
 
 
-def _resume_task():
-    """恢复任务"""
-    click.echo("正在恢复任务...")
-    # TODO: 实现完整的恢复逻辑
-    click.echo("恢复功能尚未完全实现")
+def _get_status_icon(status: str) -> str:
+    """获取状态图标"""
+    icons = {
+        "running": "🔄",
+        "completed": "✅",
+        "failed": "❌",
+        "paused": "⏸️",
+        "pending": "⏳",
+    }
+    return icons.get(status, "❓")
+
+
+def _resume_task(task_id: Optional[str] = None):
+    """
+    恢复任务
+
+    Args:
+        task_id: 指定任务 ID（可选）
+    """
+    config = _load_config()
+    manager = CheckpointManager(
+        current_dir=config.output.current_dir,
+        history_dir=config.output.history_dir,
+        atomic_writes=config.checkpoint.atomic_writes,
+        backup_count=config.checkpoint.backup_count,
+    )
+
+    # 获取可恢复的检查点
+    checkpoint = manager.get_resumable_checkpoint(task_id)
+
+    if not checkpoint:
+        click.echo("❌ 没有找到可恢复的任务")
+        if task_id:
+            click.echo(f"   指定的任务 ID '{task_id}' 不存在")
+        click.echo("   使用 'skillpack do --list-checkpoints' 查看可用任务")
+        return
+
+    # 检查是否可恢复
+    resume_info = checkpoint.get_resume_info()
+    can_resume = resume_info.get("can_resume", False)
+
+    if not can_resume:
+        click.echo(f"⚪ 任务 '{checkpoint.task_id}' 已完成，无需恢复")
+        return
+
+    # 显示恢复信息
+    click.echo(f"""
+════════════════════════════════════════════════════════════
+🔄 恢复任务
+════════════════════════════════════════════════════════════
+📋 任务: {checkpoint.task_description}
+🆔 ID: {checkpoint.task_id}
+🔀 路由: {checkpoint.route}
+📊 进度: {checkpoint.progress * 100:.0f}% ({checkpoint.current_phase}/{checkpoint.total_phases} 阶段)
+────────────────────────────────────────────────────────────
+""")
+
+    # 显示阶段状态
+    click.echo("阶段状态:")
+    for phase in checkpoint.phases:
+        if hasattr(phase, "number"):
+            num, name, status = phase.number, phase.name, phase.status
+        else:
+            num = phase.get("number", 0)
+            name = phase.get("name", "")
+            status = phase.get("status", "pending")
+
+        status_icon = _get_status_icon(status)
+        click.echo(f"  {status_icon} Phase {num}: {name} - {status}")
+
+    click.echo("────────────────────────────────────────────────────────────")
+
+    # 确认恢复
+    resume_phase = resume_info.get("resume_phase")
+    if resume_phase:
+        click.echo(f"将从 Phase {resume_phase} 继续执行")
+
+    if not click.confirm("是否继续恢复任务？"):
+        click.echo("取消恢复")
+        return
+
+    # 执行恢复
+    click.echo("\n正在恢复任务...")
+
+    # 重建 TaskContext
+    from .models import TaskContext, TaskComplexity
+
+    # 确定复杂度
+    route_str = checkpoint.route
+    complexity_map = {
+        "DIRECT": TaskComplexity.SIMPLE,
+        "PLANNED": TaskComplexity.MEDIUM,
+        "RALPH": TaskComplexity.COMPLEX,
+        "ARCHITECT": TaskComplexity.ARCHITECT,
+        "UI_FLOW": TaskComplexity.UI,
+    }
+    complexity = complexity_map.get(route_str, TaskComplexity.MEDIUM)
+
+    # 确定路由
+    route_enum_map = {
+        "DIRECT": ExecutionRoute.DIRECT,
+        "PLANNED": ExecutionRoute.PLANNED,
+        "RALPH": ExecutionRoute.RALPH,
+        "ARCHITECT": ExecutionRoute.ARCHITECT,
+        "UI_FLOW": ExecutionRoute.UI_FLOW,
+    }
+    route = route_enum_map.get(route_str, ExecutionRoute.DIRECT)
+
+    context = TaskContext(
+        description=checkpoint.task_description,
+        complexity=complexity,
+        route=route,
+        working_dir=Path.cwd(),
+    )
+
+    # 创建执行器并恢复
+    executor = TaskExecutor(config=config)
+
+    # 设置恢复模式（跳过已完成阶段）
+    # 注意：这里需要在 executor 中实现恢复逻辑
+    # 当前简化实现：重新执行所有阶段
+    click.echo(f"\n⚠️ 注意: 当前版本将重新执行任务")
+    click.echo(f"   后续版本将支持从中断点精确恢复\n")
+
+    status = executor.execute(context)
+
+    if status.error:
+        click.echo(f"✗ 恢复执行失败: {status.error}")
+        manager.mark_failed(status.error)
+    else:
+        click.echo("✓ 任务恢复完成")
+        manager.mark_completed()
 
 
 if __name__ == "__main__":

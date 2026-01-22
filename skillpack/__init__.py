@@ -26,6 +26,24 @@ from .usage import (
     UsageSummary,
     ModelStats,
 )
+from .logging import (
+    LogLevel,
+    LoggingConfig,
+    SkillpackLogger,
+    get_logger,
+    configure_logging,
+)
+from .schema import (
+    validate_config,
+    validate_config_file,
+)
+from .checkpoint import (
+    Checkpoint,
+    CheckpointManager,
+    PhaseCheckpoint,
+    PhaseStatus,
+    RecoveryInfo,
+)
 
 __version__ = "5.4.2"
 __all__ = [
@@ -46,4 +64,20 @@ __all__ = [
     "UsageAnalyzer",
     "UsageSummary",
     "ModelStats",
+    # Logging
+    "LogLevel",
+    "LoggingConfig",
+    "SkillpackLogger",
+    "get_logger",
+    "configure_logging",
+    # Schema validation
+    "validate_config",
+    "validate_config_file",
+    # Checkpoint management
+    "Checkpoint",
+    "CheckpointManager",
+    "PhaseCheckpoint",
+    "PhaseStatus",
+    "RecoveryInfo",
 ]
+
