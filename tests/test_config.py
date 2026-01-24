@@ -83,7 +83,7 @@ class TestConfigValidation:
 
         # 应该使用默认配置
         config = SkillpackConfig()
-        assert config.version == "5.5"  # v5.5 多模型规划共识
+        assert config.version == "6.0"  # v6.0 SOTA 升级
 
     def test_empty_config_file(self, temp_dir):
         """空配置文件测试"""

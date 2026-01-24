@@ -141,6 +141,7 @@ class ModelDispatcher:
     模型调度器 - 根据配置决定使用 CLI 或 MCP 调用模型。
 
     v5.4.1: CLI 优先模式，增强状态追踪和错误传递。
+    v6.0: 版本适配层 + 智能模型路由。
     """
 
     def __init__(self, config: SkillpackConfig):
@@ -156,6 +157,120 @@ class ModelDispatcher:
         self._current_phase_name: str = ""
         # 进度回调 (v5.4.1)
         self._progress_callback: Optional[Callable[[str, float], None]] = None
+
+        # v6.0: 版本适配层
+        self._codex_adapter = None
+        self._gemini_adapter = None
+        self._version_detector = None
+        if config.adapter.auto_detect:
+            self._init_adapters()
+
+    def _init_adapters(self):
+        """初始化版本适配器 (v6.0)"""
+        try:
+            from .adapters import VersionDetector, CodexAdapter, GeminiAdapter
+
+            self._version_detector = VersionDetector(
+                cache_ttl_seconds=self.config.adapter.version_cache_ttl_seconds
+            )
+
+            # 检测版本
+            codex_version = self._version_detector.detect_codex()
+            gemini_version = self._version_detector.detect_gemini()
+
+            # 创建适配器
+            self._codex_adapter = CodexAdapter(codex_version)
+            self._gemini_adapter = GeminiAdapter(gemini_version)
+
+            # 显示升级提示
+            if self.config.adapter.show_upgrade_hints:
+                self._show_upgrade_hints()
+
+        except ImportError:
+            # 适配器模块未安装，使用基础模式
+            pass
+        except Exception as e:
+            # 版本检测失败，使用基础模式
+            print(f"⚠️ 版本检测失败: {e}，使用基础模式")
+
+    def _show_upgrade_hints(self):
+        """显示升级提示 (v6.0)"""
+        if self._codex_adapter and self._codex_adapter.needs_upgrade():
+            msg = self._codex_adapter.get_upgrade_message()
+            if msg:
+                print(msg)
+
+        if self._gemini_adapter and self._gemini_adapter.needs_upgrade():
+            msg = self._gemini_adapter.get_upgrade_message()
+            if msg:
+                print(msg)
+
+    def get_version_report(self) -> str:
+        """获取版本报告 (v6.0)"""
+        if self._version_detector:
+            return self._version_detector.format_version_report()
+        return "版本检测未启用"
+
+    def select_codex_model(
+        self,
+        estimated_tokens: int = 0,
+        task_complexity: str = "medium",
+        route: str = "PLANNED"
+    ) -> str:
+        """
+        智能选择 Codex 模型 (v6.0)
+
+        Args:
+            estimated_tokens: 预估 token 数
+            task_complexity: 任务复杂度
+            route: 执行路由
+
+        Returns:
+            推荐的模型名称
+        """
+        if not self.config.smart_routing.enabled:
+            return "gpt-5.2-codex"
+
+        if self._codex_adapter:
+            return self._codex_adapter.select_model(
+                estimated_tokens=estimated_tokens,
+                task_complexity=task_complexity,
+                route=route
+            )
+
+        # 降级逻辑
+        if route == "ARCHITECT" or estimated_tokens > self.config.smart_routing.codex_max_threshold_tokens:
+            return "gpt-5.1-codex-max"
+        return "gpt-5.2-codex"
+
+    def select_gemini_model(
+        self,
+        ui_complexity: int = 5,
+        is_analysis_only: bool = False
+    ) -> str:
+        """
+        智能选择 Gemini 模型 (v6.0)
+
+        Args:
+            ui_complexity: UI 复杂度分数 (0-10)
+            is_analysis_only: 是否仅分析
+
+        Returns:
+            推荐的模型名称
+        """
+        if not self.config.smart_routing.enabled:
+            return "gemini-3-pro"
+
+        if self._gemini_adapter:
+            return self._gemini_adapter.select_model(
+                ui_complexity=ui_complexity,
+                is_analysis_only=is_analysis_only
+            )
+
+        # 降级逻辑
+        if ui_complexity < self.config.smart_routing.gemini_flash_threshold and not is_analysis_only:
+            return "gemini-3-flash"
+        return "gemini-3-pro"
 
     def set_progress_callback(self, callback: Callable[[str, float], None]):
         """设置进度回调函数 (v5.4.1)"""
@@ -354,53 +469,66 @@ class ModelDispatcher:
         self,
         prompt: str,
         context_files: Optional[List[str]] = None,
-        sandbox: str = "workspace-write"
+        sandbox: str = "workspace-write",
+        model: Optional[str] = None  # v6.0: 模型选择
     ) -> DispatchResult:
         """
         通过 CLI 调用 Codex。
 
         命令格式: codex exec "<prompt>" --full-auto
         v5.4.1: 增强错误解析和状态追踪。
+        v6.0: 版本适配 + 智能模型选择。
         """
         start_time = time.time()
         self._report_progress("启动 Codex CLI...")
 
-        # 构建完整 prompt（包含文件上下文）
-        full_prompt = self._build_prompt_with_context(prompt, context_files)
-
-        # 构建命令
-        # --full-auto = convenience alias for automated execution with workspace-write sandbox
-        # v5.5: 修复 CLI 参数，移除不存在的 -a 参数
-        if sandbox == "workspace-write":
-            # 默认: 使用 --full-auto
-            cmd = [
-                self.config.cli.codex_command,
-                "exec",
-                full_prompt,
-                "--full-auto",
-                "--skip-git-repo-check"
-            ]
-            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" --full-auto"
-        elif sandbox == "read-only":
-            # 规划模式: read-only sandbox，用于只分析不执行的场景
-            cmd = [
-                self.config.cli.codex_command,
-                "exec",
-                full_prompt,
-                "-s", "read-only",
-                "--skip-git-repo-check"
-            ]
-            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s read-only"
+        # v6.0: 使用适配器构建命令
+        if self._codex_adapter:
+            adapter_cmd = self._codex_adapter.build_exec_command(
+                prompt=prompt,
+                sandbox=sandbox,
+                context_files=context_files,
+                model=model,
+            )
+            cmd = [adapter_cmd.base_command] + adapter_cmd.args
+            command_str = self._codex_adapter.get_command_string(adapter_cmd)
         else:
-            # danger-full-access 或其他
-            cmd = [
-                self.config.cli.codex_command,
-                "exec",
-                full_prompt,
-                "-s", sandbox,
-                "--skip-git-repo-check"
-            ]
-            command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s {sandbox}"
+            # 兼容旧版逻辑
+            full_prompt = self._build_prompt_with_context(prompt, context_files)
+
+            # 构建命令
+            # --full-auto = convenience alias for automated execution with workspace-write sandbox
+            # v5.5: 修复 CLI 参数，移除不存在的 -a 参数
+            if sandbox == "workspace-write":
+                # 默认: 使用 --full-auto
+                cmd = [
+                    self.config.cli.codex_command,
+                    "exec",
+                    full_prompt,
+                    "--full-auto",
+                    "--skip-git-repo-check"
+                ]
+                command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" --full-auto"
+            elif sandbox == "read-only":
+                # 规划模式: read-only sandbox，用于只分析不执行的场景
+                cmd = [
+                    self.config.cli.codex_command,
+                    "exec",
+                    full_prompt,
+                    "-s", "read-only",
+                    "--skip-git-repo-check"
+                ]
+                command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s read-only"
+            else:
+                # danger-full-access 或其他
+                cmd = [
+                    self.config.cli.codex_command,
+                    "exec",
+                    full_prompt,
+                    "-s", sandbox,
+                    "--skip-git-repo-check"
+                ]
+                command_str = f"{self.config.cli.codex_command} exec \"<prompt>\" -s {sandbox}"
 
         try:
             self._report_progress("Codex 执行中...", 0.3)
@@ -506,30 +634,45 @@ class ModelDispatcher:
         self,
         prompt: str,
         context_files: Optional[List[str]] = None,
-        sandbox: bool = True
+        sandbox: bool = True,
+        model: Optional[str] = None  # v6.0: 模型选择
     ) -> DispatchResult:
         """
         通过 CLI 调用 Gemini。
 
         命令格式: gemini "<prompt>" -s --yolo
         v5.4.1: 增强错误解析和状态追踪。
+        v6.0: 版本适配 + 智能模型选择。
         """
         start_time = time.time()
         self._report_progress("启动 Gemini CLI...")
 
-        # Gemini 使用 @ 语法注入文件上下文
-        full_prompt = self._build_gemini_prompt(prompt, context_files)
+        # v6.0: 使用适配器构建命令
+        if self._gemini_adapter:
+            sandbox_mode = "workspace-write" if sandbox else None
+            adapter_cmd = self._gemini_adapter.build_exec_command(
+                prompt=prompt,
+                sandbox=sandbox_mode,
+                context_files=context_files,
+                model=model,
+            )
+            cmd = [adapter_cmd.base_command] + adapter_cmd.args
+            command_str = self._gemini_adapter.get_command_string(adapter_cmd)
+        else:
+            # 兼容旧版逻辑
+            # Gemini 使用 @ 语法注入文件上下文
+            full_prompt = self._build_gemini_prompt(prompt, context_files)
 
-        # 构建命令
-        cmd = [self.config.cli.gemini_command, full_prompt]
+            # 构建命令
+            cmd = [self.config.cli.gemini_command, full_prompt]
 
-        if sandbox:
-            cmd.append("-s")
+            if sandbox:
+                cmd.append("-s")
 
-        # --yolo 自动批准所有操作
-        cmd.append("--yolo")
+            # --yolo 自动批准所有操作
+            cmd.append("--yolo")
 
-        command_str = f"{self.config.cli.gemini_command} \"<prompt>\" -s --yolo"
+            command_str = f"{self.config.cli.gemini_command} \"<prompt>\" -s --yolo"
 
         try:
             self._report_progress("Gemini 执行中...", 0.3)

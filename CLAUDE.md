@@ -1,6 +1,6 @@
 # OpenAlpha
 
-智能任务执行器 v5.4.0 - 统一入口，量化决策，多模型协作，**CLI 优先 + 独立审查 + 交叉验证**
+智能任务执行器 v6.0.0 - 统一入口，量化决策，多模型协作，**版本自适应 + 智能路由 + Skill 系统**
 
 ## 快速开始
 
@@ -19,7 +19,25 @@
 
 # 使用 CLI 直接调用（绕过 MCP）
 /do "fix bug" --cli
+
+# v6.0: 探索性分支执行
+/do "探索两种方案" --branch
+
+# v6.0: 指定模型
+/do "complex task" --model codex-max
 ```
+
+## v6.0 新特性 (SOTA 升级)
+
+| 特性 | 说明 |
+|------|------|
+| **版本适配层** | 自动检测 Codex/Gemini CLI 版本，功能探测 + 优雅降级 |
+| **智能模型路由** | 根据任务复杂度自动选择 gpt-5.2-codex / codex-max / gemini-3-flash / gemini-3-pro |
+| **Skill 系统统一** | SKILL.toml 配置，热重载，触发词匹配 |
+| **懒加载工具发现** | 启动仅加载元数据 (~5k tokens)，按需加载完整 Schema |
+| **DAG 可视化** | ASCII 波次图，进度条，关键路径分析 |
+| **分支管理** | Codex fork 集成，探索性分支，置信度比较，自动合并 |
+| **LSP 集成** | go-to-definition, find-references, hover (可选) |
 
 ## v5.4 新特性
 
@@ -100,6 +118,9 @@
 | `--resume` | 从最近检查点恢复 |
 | `--resume <task_id>` | 恢复指定任务 |
 | `--list-checkpoints` | 查看可恢复任务 |
+| `--branch` | 启用探索性分支执行（v6.0 新增） |
+| `--model <name>` | 指定模型 (codex/codex-max/gemini-flash/gemini-pro)（v6.0 新增） |
+| `--version-report` | 显示 CLI 版本检测报告（v6.0 新增） |
 
 ## 智能路由逻辑
 
@@ -321,7 +342,7 @@ gemini -s --yolo "@src/pages/login.tsx implement form validation"
 
 ```json
 {
-  "version": "5.0",
+  "version": "6.0",
   "knowledge": {
     "default_notebook": "your-notebook-id",
     "auto_query": true
@@ -351,18 +372,45 @@ gemini -s --yolo "@src/pages/login.tsx implement form validation"
     "auto_fallback_to_cli": true
   },
   "cli": {
-    "codex_path": "codex",
-    "gemini_path": "gemini",
-    "prefer_cli_over_mcp": false,
-    "cli_timeout_seconds": 300
+    "codex_command": "codex",
+    "gemini_command": "gemini",
+    "prefer_cli_over_mcp": true,
+    "cli_timeout_seconds": 600
   },
   "parallel": {
-    "enabled": false,
+    "enabled": true,
     "max_concurrent_tasks": 3,
-    "poll_interval_seconds": 5,
-    "task_timeout_seconds": 300,
-    "allow_cross_model_parallel": true,
     "fallback_to_serial_on_failure": true
+  },
+  "adapter": {
+    "auto_detect": true,
+    "codex_min_version": "0.80.0",
+    "gemini_min_version": "0.15.0",
+    "show_upgrade_hints": true
+  },
+  "smart_routing": {
+    "enabled": true,
+    "codex_max_threshold_tokens": 100000,
+    "gemini_flash_threshold": 5,
+    "prefer_codex_for_code": true,
+    "prefer_gemini_for_ui": true
+  },
+  "tool_discovery": {
+    "lazy_load": true,
+    "cache_ttl_seconds": 300
+  },
+  "branch": {
+    "enabled": true,
+    "max_branches": 5,
+    "auto_merge_threshold": 0.9
+  },
+  "skill_system": {
+    "enabled": true,
+    "hot_reload": true
+  },
+  "lsp": {
+    "enabled": false,
+    "auto_start": false
   },
   "output": {
     "current_dir": ".skillpack/current",
@@ -418,13 +466,49 @@ model_reasoning_effort = "xhigh"
 
 ## 依赖插件
 
-- **delta-skillpack v5.4.0** - 提供 `/do` 命令及相关 skills（已全局安装）
-  - v5.4 新增：Grounding 机制（代码证据 `file:line` 格式）
-  - v5.4 新增：独立审查者模式（Codex → Gemini → Claude 仲裁）
-  - v5.4 新增：保守表述原则、交叉验证、测试分类标准
-  - v5.3 新增：CLI 优先模式（禁止 MCP，强制 CLI 调用）
-  - v5.2 新增：异步并行执行（`--parallel` / `--no-parallel`）
-  - v5.2 新增：DAG 依赖分析、波次管理、跨模型并行
-  - v5.1：`--cli` 标志，CLI 直接调用，自动 CLI 降级
-  - v5.0：原子检查点、结构化日志、任务粒度控制
-  - v4.0：MCP 强制调用、循环执行引擎
+- **delta-skillpack v6.0.0** - 提供 `/do` 命令及相关 skills（已全局安装）
+  - **v6.0 新增**：版本适配层（自动检测 CLI 版本，功能探测 + 优雅降级）
+  - **v6.0 新增**：智能模型路由（codex/codex-max/gemini-flash/gemini-pro 自动选择）
+  - **v6.0 新增**：Skill 系统统一（SKILL.toml, 热重载, 触发词匹配）
+  - **v6.0 新增**：懒加载工具发现（启动 ~5k tokens，按需加载 Schema）
+  - **v6.0 新增**：DAG 可视化（ASCII 波次图，进度条，关键路径）
+  - **v6.0 新增**：分支管理（Codex fork 集成，探索性分支）
+  - **v6.0 新增**：LSP 集成（go-to-definition, find-references, hover）
+  - v5.4：Grounding 机制、独立审查者模式、保守表述原则、交叉验证
+  - v5.3：CLI 优先模式（禁止 MCP，强制 CLI 调用）
+  - v5.2：异步并行执行、DAG 依赖分析、波次管理
+  - v5.1：`--cli` 标志，CLI 直接调用
+  - v5.0：原子检查点、结构化日志
+  - v4.0：循环执行引擎
+
+## v6.0 架构
+
+```
+skillpack/
+├── adapters/                 # v6.0: 版本适配层
+│   ├── version_detector.py   # CLI 版本检测
+│   ├── codex_adapter.py      # Codex 适配器
+│   └── gemini_adapter.py     # Gemini 适配器
+├── skills/                   # v6.0: Skill 系统
+│   ├── registry.py           # Skill 注册表
+│   ├── loader.py             # 热重载加载器
+│   └── metadata.py           # SKILL.toml 解析
+├── tools/                    # v6.0: 工具发现
+│   ├── registry.py           # 工具注册表
+│   ├── lazy_loader.py        # 懒加载器
+│   └── search.py             # 工具搜索
+├── tasks/                    # v6.0: 任务管理
+│   ├── dag.py                # DAG 依赖图
+│   ├── visualizer.py         # ASCII 可视化
+│   └── branch.py             # 分支管理
+├── integrations/             # v6.0: 集成层
+│   └── lsp/                  # LSP 代码智能
+│       ├── client.py
+│       └── config.py
+├── models.py                 # 数据模型 (含 v6.0 配置)
+├── dispatch.py               # 模型调度器 (含智能路由)
+├── executor.py               # 任务执行器
+├── router.py                 # 路由决策
+├── checkpoint.py             # 检查点
+└── consensus.py              # 多模型共识
+```

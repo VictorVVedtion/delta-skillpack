@@ -1,5 +1,5 @@
 {
-  "version": "5.4",
+  "version": "6.0",
   "knowledge": {
     "default_notebook": "ffa73340-e818-4bcc-9809-a58e62e52982",
     "auto_query": true
@@ -53,5 +53,47 @@
     "enabled": true,
     "max_concurrent_tasks": 3,
     "fallback_to_serial_on_failure": true
+  },
+  "adapter": {
+    "auto_detect": true,
+    "codex_min_version": "0.80.0",
+    "gemini_min_version": "0.15.0",
+    "codex_recommended": "0.89.0",
+    "gemini_recommended": "0.25.0",
+    "version_cache_ttl_seconds": 300,
+    "show_upgrade_hints": true
+  },
+  "smart_routing": {
+    "enabled": true,
+    "codex_max_threshold_tokens": 100000,
+    "gemini_flash_threshold": 5,
+    "prefer_codex_for_code": true,
+    "prefer_gemini_for_ui": true,
+    "auto_model_upgrade": true
+  },
+  "tool_discovery": {
+    "lazy_load": true,
+    "cache_ttl_seconds": 300,
+    "max_tools_per_request": 20,
+    "preload_common_tools": true
+  },
+  "branch": {
+    "enabled": true,
+    "max_branches": 5,
+    "auto_merge_threshold": 0.9,
+    "preserve_history": true
+  },
+  "skill_system": {
+    "enabled": true,
+    "hot_reload": true,
+    "user_skills_dir": "~/.skillpack/skills",
+    "project_skills_dir": ".skillpack/skills",
+    "debounce_ms": 500
+  },
+  "lsp": {
+    "enabled": false,
+    "auto_start": false,
+    "supported_languages": ["typescript", "python", "go", "rust"],
+    "timeout_seconds": 30
   }
 }

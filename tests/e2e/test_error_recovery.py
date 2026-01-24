@@ -198,7 +198,7 @@ class TestConfigErrorHandling:
         try:
             os.chdir(temp_dir)
             config = _load_config()
-            assert config.version == "5.5"  # v5.5 多模型规划共识
+            assert config.version == "6.0"  # v6.0 SOTA 升级
         finally:
             os.chdir(original_dir)
 

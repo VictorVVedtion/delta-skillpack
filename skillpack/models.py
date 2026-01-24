@@ -122,6 +122,96 @@ class ConsensusConfig:
             self.covered_routes = ["PLANNED", "RALPH", "ARCHITECT"]
 
 
+# ==================== v6.0 新增配置类 ====================
+
+@dataclass
+class AdapterConfig:
+    """
+    CLI 适配器配置 (v6.0)
+
+    控制版本检测和功能适配行为。
+    """
+    auto_detect: bool = True              # 是否自动检测 CLI 版本
+    codex_min_version: str = "0.80.0"     # Codex 最低支持版本
+    gemini_min_version: str = "0.15.0"    # Gemini 最低支持版本
+    codex_recommended: str = "0.89.0"     # Codex 推荐版本
+    gemini_recommended: str = "0.25.0"    # Gemini 推荐版本
+    version_cache_ttl_seconds: int = 300  # 版本缓存有效期
+    show_upgrade_hints: bool = True       # 显示升级提示
+
+
+@dataclass
+class SmartRoutingConfig:
+    """
+    智能模型路由配置 (v6.0)
+
+    根据任务特征自动选择最优模型。
+    """
+    enabled: bool = True                      # 是否启用智能路由
+    codex_max_threshold_tokens: int = 100_000 # 超过此 token 数使用 Codex-Max
+    gemini_flash_threshold: int = 5           # UI 复杂度低于此值使用 Gemini Flash
+    prefer_codex_for_code: bool = True        # 代码任务优先 Codex
+    prefer_gemini_for_ui: bool = True         # UI 任务优先 Gemini
+    auto_model_upgrade: bool = True           # 自动升级到更强模型
+
+
+@dataclass
+class ToolDiscoveryConfig:
+    """
+    工具发现配置 (v6.0)
+
+    控制懒加载和工具缓存行为。
+    """
+    lazy_load: bool = True                # 是否启用懒加载
+    cache_ttl_seconds: int = 300          # 工具元数据缓存有效期
+    max_tools_per_request: int = 20       # 每次请求最大加载工具数
+    preload_common_tools: bool = True     # 预加载常用工具
+
+
+@dataclass
+class BranchConfig:
+    """
+    分支管理配置 (v6.0)
+
+    支持 Codex fork 功能和探索性分支。
+    """
+    enabled: bool = True                  # 是否启用分支管理
+    max_branches: int = 5                 # 最大并行分支数
+    auto_merge_threshold: float = 0.9     # 自动合并置信度阈值
+    preserve_history: bool = True         # 保留分支历史
+
+
+@dataclass
+class SkillSystemConfig:
+    """
+    Skill 系统配置 (v6.0)
+
+    统一的 Skill 注册和热重载配置。
+    """
+    enabled: bool = True                  # 是否启用 Skill 系统
+    hot_reload: bool = True               # 是否启用热重载
+    user_skills_dir: str = "~/.skillpack/skills"  # 用户 Skill 目录
+    project_skills_dir: str = ".skillpack/skills" # 项目 Skill 目录
+    debounce_ms: int = 500                # 热重载防抖时间
+
+
+@dataclass
+class LSPConfig:
+    """
+    LSP 集成配置 (v6.0)
+
+    代码智能功能配置。
+    """
+    enabled: bool = False                 # 是否启用 LSP（默认关闭）
+    auto_start: bool = False              # 是否自动启动 LSP 服务
+    supported_languages: list = None      # 支持的语言列表
+    timeout_seconds: int = 30             # LSP 请求超时
+
+    def __post_init__(self):
+        if self.supported_languages is None:
+            self.supported_languages = ["typescript", "python", "go", "rust"]
+
+
 @dataclass
 class OutputConfig:
     """输出目录配置"""
@@ -132,7 +222,7 @@ class OutputConfig:
 @dataclass
 class SkillpackConfig:
     """Skillpack 配置"""
-    version: str = "5.5"
+    version: str = "6.0"
     knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     routing: RoutingConfig = field(default_factory=RoutingConfig)
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
@@ -142,6 +232,13 @@ class SkillpackConfig:
     cross_validation: CrossValidationConfig = field(default_factory=CrossValidationConfig)
     consensus: ConsensusConfig = field(default_factory=ConsensusConfig)  # v5.5 新增
     output: OutputConfig = field(default_factory=OutputConfig)
+    # v6.0 新增配置
+    adapter: AdapterConfig = field(default_factory=AdapterConfig)
+    smart_routing: SmartRoutingConfig = field(default_factory=SmartRoutingConfig)
+    tool_discovery: ToolDiscoveryConfig = field(default_factory=ToolDiscoveryConfig)
+    branch: BranchConfig = field(default_factory=BranchConfig)
+    skill_system: SkillSystemConfig = field(default_factory=SkillSystemConfig)
+    lsp: LSPConfig = field(default_factory=LSPConfig)
 
 
 @dataclass

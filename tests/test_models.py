@@ -154,7 +154,7 @@ class TestSkillpackConfig:
     def test_default_values(self):
         """默认值测试"""
         config = SkillpackConfig()
-        assert config.version == "5.5"  # v5.5 多模型规划共识
+        assert config.version == "6.0"  # v6.0 SOTA 升级
         assert isinstance(config.knowledge, KnowledgeConfig)
         assert isinstance(config.routing, RoutingConfig)
         assert isinstance(config.checkpoint, CheckpointConfig)
